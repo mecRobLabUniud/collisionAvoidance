@@ -1,0 +1,15 @@
+# 1. Crea cartella di build
+mkdir build
+cd build
+
+# 2. Configura il progetto con CMake
+cmake .. -DCMAKE_BUILD_TYPE=Release -DFranka_DIR=/home/lab/donaldo_ws/home/lab/donaldo_ws/libfranka/build
+
+# 3. Compila il codice (dentro la cartella build)
+make
+
+# 4. Ricordati di salvare nella build eventuali file (esempio .csv ecc...)
+cp ../<*>.csv .
+
+# 5. Esegui il programma (inserisci l'ip del robot <ip_robot> ossia 172.16.0.2)
+./eseguibile 172.16.0.2
