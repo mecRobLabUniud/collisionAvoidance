@@ -46,13 +46,15 @@ arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri
 torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
 max_depth_range = 3.0   # [m] Ignora punti oltre questa distanza (D435 diventa rumorosa)
 endpoint = "ipc:///tmp/skeleton.ipc" # Indirizzo socket ZeroMQ (IPC per comunicazione locale veloce)
-save_video = True      # Imposta a True per salvare il video, False altrimenti
+save_video = False      # Imposta a True per salvare il video, False altrimenti
 script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory where this script is located
 video_filename = os.path.join(script_dir, "../media/outputSkeletonTracking.avi")
 wCamera, hCamera = 848, 480
 cameraRate = 60
 yoloModel = "yolo26n-pose.pt" # "yolov8x-pose.pt"
-color_imgs = [None, None] # Per visualizzazione a schermo (debug)
+color_imgs = [] # Per visualizzazione a schermo (debug)
+
+
 
 # ---------- Filtro One Euro ----------
 # Implementazione del filtro 1€ (One Euro Filter) per smoothing adattivo dei keypoints.
@@ -95,6 +97,8 @@ class OneEuroFilter:
         self.dx_prev = dx_hat
         self.t_prev = t
         return x_hat
+
+
 
 # Classe per gestire il filtraggio 3D indipendente dei keypoints dello skeleton.
 # Crea filtri One Euro separati per ogni coordinata (x,y,z) di ogni keypoint.
@@ -176,11 +180,15 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
     zs.sort()
     return zs[len(zs) // 2]
 
+
+
 # Carica la matrice di trasformazione omogenea (4x4) dal file TXT.
 def load_T_base_cam(path_txt):
     T = np.loadtxt(path_txt, dtype=np.float64)
     assert T.shape == (4, 4)
     return T
+
+
 
 # Applica una trasformazione rigida (rotazione + traslazione) ai punti 3D.
 # Usata per passare dal sistema di riferimento della telecamera a quello della base del robot.
@@ -203,6 +211,8 @@ def transform_points(T, pts_xyz):
 # <: Little-Endian
 # 8f: 8 float (4 byte ciascuno) (x1, y1, z1 per l'inizio, x2, y2, z2 per la fine, radius, conf)
 
+
+
 def cameraStreaming(serial):
     align = rs.align(rs.stream.color) # Allinea depth a color
 
@@ -216,9 +226,11 @@ def cameraStreaming(serial):
 
     return pipe
 
-def extractArray(pipe, align, model, smoother, T_base_cam, pub, video_writer, n):
+
+
+def skeletonTracking(pipe, align, model, smoother, T_base_cam, pub, video_writer, n):
     global color_imgs, running
-    while True:
+    while running:
         t0 = time.time()
         
         # Acquisizione frame (fs)
@@ -235,7 +247,8 @@ def extractArray(pipe, align, model, smoother, T_base_cam, pub, video_writer, n)
         color_img = np.asanyarray(color.get_data()) # trasforma i dati grezzi della telecamera in un array NumPy
         
         # Inferenza rete neurale
-        results = model.predict(color_img, verbose=False)
+        with mutex:
+            results = model.predict(color_img, verbose=False)
         
         caps = []
         # Se è stata rilevata almeno una persona
@@ -321,7 +334,7 @@ def extractArray(pipe, align, model, smoother, T_base_cam, pub, video_writer, n)
 
         # Misura del tempo ciclo
         tNow = time.time()
-        print(f"Tempo ciclo: {tNow - t0:.3f} s")
+        print(f"Tempo ciclo thread {n}: {tNow - t0:.3f} s")
 
         # Salvataggio video
         if save_video and video_writer is not None:
@@ -330,11 +343,8 @@ def extractArray(pipe, align, model, smoother, T_base_cam, pub, video_writer, n)
         #print( f"color_img: {color_img}")
         color_imgs[n-1] = color_img # Salva l'immagine processata per la visualizzazione nel main (n-1 perché n parte da 1)
 
-        # # Mostra l'immagine a schermo (premere 'q' per uscire, anche se lo script bash lo chiuderà forzatamente)
-        # cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", color_img)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        #     break 
-        
+
+
 def main():    
     T_base_cam = load_T_base_cam(os.path.join(script_dir, "../rotation_matrix.txt")) # Carica calibrazione camera-robot
     # --- DEBUG: Usa una matrice identità per bypassare la calibrazione errata ---    
@@ -344,8 +354,8 @@ def main():
     model = YOLO(yoloModel)
 
     # Inizializzazione ZeroMQ (Publisher)
-    ctx = zmq.Context.instance()
-    pub = ctx.socket(zmq.PUB) # socket di tipo Publisher (trasmette dati a chiunque sia connesso, se nessuno è connesso i dati vengono persi)
+    zctx = zmq.Context.instance()
+    pub = zctx.socket(zmq.PUB) # socket di tipo Publisher (trasmette dati a chiunque sia connesso, se nessuno è connesso i dati vengono persi)
     pub.setsockopt(zmq.LINGER, 0) # Evita che ZMQ blocchi la chiusura se ci sono messaggi pendenti
     pub.bind(endpoint) # Associa il socket all'endpoint specificato (questo script python crea e possiede il socket, gli altri processi si connettono a questo endpoint, come il cpp del controllo ammettenza)
 
@@ -365,55 +375,50 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Devices initialization: supporta più telecamere RealSense collegate, ognuna con la propria pipeline e allineamento
-    align = rs.align(rs.stream.color) # Allinea depth a color
+    try:
+        # Devices initialization: supporta più telecamere RealSense collegate, ognuna con la propria pipeline e allineamento
+        align = rs.align(rs.stream.color) # Allinea depth a color
 
-    ctx = rs.context()
-    devices = ctx.devices
-    pipes = []
-    for i, device in enumerate(devices):
-        pipes.append(cameraStreaming(device.get_info(rs.camera_info.serial_number)))
-        print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
+        ctx = rs.context()
+        devices = ctx.devices  # Query connected devices
+        pipes = []
+        for i, device in enumerate(devices):
+            pipes.append(cameraStreaming(device.get_info(rs.camera_info.serial_number)))
+            print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
+        
+        # Create and start threads
+        threads = []
+        for n, pipe in enumerate(pipes):
+            thread = threading.Thread(target=skeletonTracking, args=(pipe, align, model, smoother, T_base_cam, pub, video_writer, n))
+            color_imgs.append(None) # Inizializza la lista delle immagini per la visualizzazione
+            thread.start()
+            threads.append(thread)
 
-    
-    # Create threads
-    thread1 = threading.Thread(target=extractArray, args=(pipes[0], align, model, smoother, T_base_cam, pub, video_writer, 1))
-    thread2 = threading.Thread(target=extractArray, args=(pipes[1], align, model, smoother, T_base_cam, pub, video_writer, 2))
+            
 
-    thread1.start()
-    thread2.start()
+        while running:
+            for n, color_img in enumerate(color_imgs):
+                # Mostra l'immagine a schermo (premere 'q' per uscire, anche se lo script bash lo chiuderà forzatamente)
+                if not color_img is None:
+                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", color_img)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break 
+    finally:
+        # Wait for both to finish
+        for thread in threads:
+            thread.join()
 
-    print("Threads started, entering main loop for display...")
+        # Cleanup risorse (fondamentale per non bloccare la RealSense al riavvio)
+        print("Chiusura pipeline e finestre...")
+        for pipe in pipes:
+            pipe.stop()
+        cv2.destroyAllWindows()
+        if video_writer is not None:
+            video_writer.release()
+        pub.close()
+        # ctx.term()
 
-    while running:
-        print("####################")
-        for n, color_img in enumerate(color_imgs):
-            # Mostra l'immagine a schermo (premere 'q' per uscire, anche se lo script bash lo chiuderà forzatamente)
-            if not color_img is None:
-                cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", color_img)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break 
 
-
-    # Wait for both to finish
-    thread1.join()
-    thread2.join()
-
-    # extractArray(running, pipe[0], align, model, smoother, T_base_cam, pub, video_writer)
-
-    
-
-         
-
-    # Cleanup risorse (fondamentale per non bloccare la RealSense al riavvio)
-    print("Chiusura pipeline e finestre...")
-    for pipe in pipes:
-        pipe.stop()
-    cv2.destroyAllWindows()
-    if video_writer is not None:
-        video_writer.release()
-    pub.close()
-    ctx.term()
 
 if __name__ == "__main__":
     main()
