@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
+
 """
+ _                  ____                               ____  _            
+| |___      _____  / ___|__ _ _ __ ___   ___ _ __ __ _/ ___|| |_ _ __ ___   __ _ _ __ ___  
+| __\ \ /\ / / _ \| |   / _` | '_ ` _ \ / _ \ '__/ _` \___ \| __| '__/ _ \ / _` | '_ ` _ \ 
+| |_ \ V  V / (_) | |__| (_| | | | | | |  __/ | | (_| |___) | |_| | |  __/| (_| | | | | | |
+ \__| \_/\_/ \___/ \____\__,_|_| |_| |_|\___|_|  \__,_|____/ \__|_|  \___| \__,_|_| |_| |_|
+
+
 Script per il rilevamento dello skeleton umano e trasmissione dati via ZeroMQ.
 Utilizza YOLOv8 per il pose estimation da camera RealSense, applica filtri One Euro
 per ridurre il jitter, converte i keypoints in capsule geometriche e trasmette
@@ -17,9 +25,6 @@ import zmq
 import pyrealsense2 as rs
 from ultralytics import YOLO
 import threading
-
-mutex = threading.Lock()
-running = True
 
 MAGIC = b"SKEL" 
 VERSION = 1
@@ -39,8 +44,10 @@ COCO_SKELETON = [
 ]
 # Filtra solo le connessioni che coinvolgono i keypoint target
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+print("EDGES (ossa da disegnare):", EDGES)
 
 # Parametri rapidi
+running = True
 conf_thr = 0.5          # Soglia di confidenza minima per considerare valido un keypoint
 arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri)
 torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
@@ -51,8 +58,122 @@ script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory w
 video_filename = os.path.join(script_dir, "../media/outputSkeletonTracking.avi")
 wCamera, hCamera = 848, 480
 cameraRate = 60
-yoloModel = "yolo26n-pose.pt" # "yolov8x-pose.pt"
+yoloModel = "yolo26n-pose" # "yolov8x-pose.pt"
 color_imgs = [] # Per visualizzazione a schermo (debug)
+
+
+
+
+class skeletonTracker:
+    def __init__(self, device, align, model, smoother, T_base_cam, pub, video_writer, n):
+        self.device = device
+        self.pipe = cameraStreaming(self.device)
+        self.frame = None
+        self.started = False
+        self.xyz = None
+        self.conf = None
+        self.mutex = threading.Lock()
+        self.thread = threading.Thread(target=self.skeletonTracking, args=(align, model, smoother, T_base_cam, pub, video_writer, n))
+
+    def start(self):
+        if self.started:
+            return
+        self.started = True
+        self.thread.start()
+        return self
+
+    def skeletonTracking(self, align, model, smoother, T_base_cam, pub, video_writer, n):
+        global color_imgs, running
+        while running and self.started:
+            t0 = time.time()
+            
+            # Acquisizione frame (fs)
+            fs = self.pipe.wait_for_frames()
+            fs = align.process(fs) # Allineamento fondamentale per far corrispondere pixel RGB a Depth
+            depth = fs.get_depth_frame()
+            color = fs.get_color_frame()
+            w_img, h_img = depth.get_width(), depth.get_height()
+
+            if not depth or not color:
+                continue
+
+            # Conversione immagine per YOLO
+            color_img = np.asanyarray(color.get_data()) # trasforma i dati grezzi della telecamera in un array NumPy
+            
+            # Inferenza rete neurale
+            results = model.predict(color_img, verbose=False)
+            
+            # Se è stata rilevata almeno una persona
+            if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
+                person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
+                xy = person[:, :2]
+                conf = person[:, 2]
+
+                # Intrinseci della camera per la deproiezione
+                intr = depth.profile.as_video_stream_profile().intrinsics
+
+                # Estrazione coordinate 3D nel frame Camera
+                xyz_cam = np.full((17, 3), np.nan, dtype=np.float32)
+                for k in TARGET_KEYPOINTS:
+                    if conf[k] < conf_thr:
+                        continue
+                    u, v = float(xy[k, 0]), float(xy[k, 1])
+                    
+                    # MODIFICA: Scarta keypoint troppo vicini ai bordi dell'immagine (lente distorta / parzialmente fuori)
+                    margin = 15
+                    if u < margin or u > w_img - margin or v < margin or v > h_img - margin:
+                        continue
+
+                    # Lettura robusta della profondità (con max_dist e R aumentato)
+                    z = robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
+                    if not math.isfinite(z):
+                        continue
+                    # Deproiezione: da pixel 2D + depth, a punto 3D (metri)
+                    X, Y, Z = rs.rs2_deproject_pixel_to_point(intr, [u, v], z)
+                    xyz_cam[k] = np.array([X, Y, Z], dtype=np.float32)
+
+                # Filtraggio temporale (OneEuroFilter)
+                with self.mutex:
+                    self.xyz = smoother.update(xyz_cam, conf, conf_thr)
+                    self.conf = conf
+                    
+                # --- VISUALIZZAZIONE REAL-TIME ---
+                # Disegna lo scheletro direttamente sull'immagine RGB per il debug a video
+                for (u, v) in EDGES:
+                    if conf[u] >= conf_thr and conf[v] >= conf_thr:
+                        pt1 = (int(xy[u, 0]), int(xy[u, 1]))
+                        pt2 = (int(xy[v, 0]), int(xy[v, 1]))
+                        cv2.line(color_img, pt1, pt2, (0, 255, 0), 2)
+                for k in TARGET_KEYPOINTS:
+                    if conf[k] >= conf_thr:
+                        cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 4, (0, 0, 255), -1)
+
+            # Misura del tempo ciclo
+            tNow = time.time()
+            if n == 1:
+                print(f"\rTempo ciclo thread {n}: {tNow - t0:.3f} s", end="")
+            else:
+                print(f" - Tempo ciclo thread {n}: {tNow - t0:.3f} s", end="")
+
+            #print( f"color_img: {color_img}")
+            with self.mutex:
+                self.frame = color_img
+
+    def readFrame(self):
+        with self.mutex:
+            frame = self.frame.copy() if self.frame is not None else None
+        return frame
+    
+    def readCoords(self):
+        with self.mutex:
+            xyz = self.xyz.copy() if self.xyz is not None else None
+            conf = self.conf.copy() if self.conf is not None else None
+        return xyz, conf
+
+    def stop(self):
+        self.started = False
+        self.thread.join()
+        # self.pipe.release()
 
 
 
@@ -214,8 +335,6 @@ def transform_points(T, pts_xyz):
 
 
 def cameraStreaming(serial):
-    align = rs.align(rs.stream.color) # Allinea depth a color
-
     # Inizializzazione pipeline RealSense
     pipe = rs.pipeline()
     cfg = rs.config()
@@ -223,125 +342,7 @@ def cameraStreaming(serial):
     cfg.enable_stream(rs.stream.depth, wCamera, hCamera, rs.format.z16, cameraRate)
     cfg.enable_stream(rs.stream.color, wCamera, hCamera, rs.format.bgr8, cameraRate)
     pipe.start(cfg)
-
     return pipe
-
-
-
-def skeletonTracking(pipe, align, model, smoother, T_base_cam, pub, video_writer, n):
-    global color_imgs, running
-    while running:
-        t0 = time.time()
-        
-        # Acquisizione frame (fs)
-        fs = pipe.wait_for_frames()
-        fs = align.process(fs) # Allineamento fondamentale per far corrispondere pixel RGB a Depth
-        depth = fs.get_depth_frame()
-        color = fs.get_color_frame()
-        w_img, h_img = depth.get_width(), depth.get_height()
-
-        if not depth or not color:
-            continue
-
-        # Conversione immagine per YOLO
-        color_img = np.asanyarray(color.get_data()) # trasforma i dati grezzi della telecamera in un array NumPy
-        
-        # Inferenza rete neurale
-        with mutex:
-            results = model.predict(color_img, verbose=False)
-        
-        caps = []
-        # Se è stata rilevata almeno una persona
-        if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
-            person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
-            xy = person[:, :2]
-            conf = person[:, 2]
-
-            # Intrinseci della camera per la deproiezione
-            intr = depth.profile.as_video_stream_profile().intrinsics
-
-            # 1. Estrazione coordinate 3D nel frame Camera
-            xyz_cam = np.full((17, 3), np.nan, dtype=np.float32)
-            for k in TARGET_KEYPOINTS:
-                if conf[k] < conf_thr:
-                    continue
-                u, v = float(xy[k, 0]), float(xy[k, 1])
-                
-                # MODIFICA: Scarta keypoint troppo vicini ai bordi dell'immagine (lente distorta / parzialmente fuori)
-                margin = 15
-                if u < margin or u > w_img - margin or v < margin or v > h_img - margin:
-                    continue
-
-                # Lettura robusta della profondità (con max_dist e R aumentato)
-                z = robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
-                if not math.isfinite(z):
-                    continue
-                # Deproiezione: da pixel 2D + depth, a punto 3D (metri)
-                X, Y, Z = rs.rs2_deproject_pixel_to_point(intr, [u, v], z)
-                xyz_cam[k] = np.array([X, Y, Z], dtype=np.float32)
-
-            # 2. Filtraggio temporale (OneEuroFilter)
-            xyz_cam_s = smoother.update(xyz_cam, conf, conf_thr)
-                  
-            # 3. Trasformazione nel frame Base del Robot
-            # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
-            xyz_base = transform_points(T_base_cam, xyz_cam_s.astype(np.float64)).astype(np.float32)
-
-            # 4. Creazione delle capsule (segmenti)
-            # (Volendo, si potrebbe considerare una logica per la quale se in questo momento non  vedo nulla, mando comunque l'ultima cosa valida, per evitare come faccio adesso di non mandare nulla.)
-            
-            # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
-            # Helper per validità
-            def is_valid_kpt(k):
-                return (conf[k] >= conf_thr) and np.all(np.isfinite(xyz_base[k]))
-
-            # 1. Braccia: Spalla-Gomito (5-7, 6-8) e Gomito-Polso (7-9, 8-10)
-            arm_pairs = [(5, 7), (7, 9), (6, 8), (8, 10)]
-            for (u, v) in arm_pairs:
-                if is_valid_kpt(u) and is_valid_kpt(v):
-                    if len(caps) >= MAX_CAPS: break
-                    pa, pb = xyz_base[u], xyz_base[v]
-                    caps.append((pa[0], pa[1], pa[2], pb[0], pb[1], pb[2], float(arms_radius), float(min(conf[u], conf[v]))))
-
-            # 2. Busto + Testa: Unica capsula dal punto medio dei fianchi (11,12) al naso (0)
-            if is_valid_kpt(11) and is_valid_kpt(12) and is_valid_kpt(0):
-                if len(caps) < MAX_CAPS:
-                    p_hips = (xyz_base[11] + xyz_base[12]) * 0.5
-                    p_nose = xyz_base[0]
-                    c_torso = min(conf[11], conf[12], conf[0])
-                    caps.append((p_hips[0], p_hips[1], p_hips[2], p_nose[0], p_nose[1], p_nose[2], float(torso_radius), float(c_torso)))
-            
-            # --- VISUALIZZAZIONE REAL-TIME ---
-            # Disegna lo scheletro direttamente sull'immagine RGB per il debug a video
-            for (u, v) in EDGES:
-                if conf[u] >= conf_thr and conf[v] >= conf_thr:
-                    pt1 = (int(xy[u, 0]), int(xy[u, 1]))
-                    pt2 = (int(xy[v, 0]), int(xy[v, 1]))
-                    cv2.line(color_img, pt1, pt2, (0, 255, 0), 2)
-            for k in TARGET_KEYPOINTS:
-                if conf[k] >= conf_thr:
-                    cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 4, (0, 0, 255), -1)
-
-        # 5. Serializzazione e invio dati (impacchettamento e invio nel loop)
-        t_mono_ns = time.monotonic_ns()
-        # Header: Magic, Versione, Numero Capsule, Timestamp
-        # struct.pack(): converte i dati in una stringa di byte secondo il formato specificato
-        header = struct.pack(HDR_FMT, MAGIC, VERSION, len(caps), t_mono_ns)
-        # Payload: Lista di capsule (*rec serve a spacchettare la tupla della capsula in singoli argomenti - grazie all'asterisco -)
-        payload = b"".join(struct.pack(REC_FMT, *rec) for rec in caps)
-        # Invio messaggio completo (header + payload) (singolo messaggio atomico)
-        pub.send(header + payload)
-
-        # Misura del tempo ciclo
-        tNow = time.time()
-        print(f"Tempo ciclo thread {n}: {tNow - t0:.3f} s")
-
-        # Salvataggio video
-        if save_video and video_writer is not None:
-            video_writer.write(color_img)
-
-        #print( f"color_img: {color_img}")
-        color_imgs[n-1] = color_img # Salva l'immagine processata per la visualizzazione nel main (n-1 perché n parte da 1)
 
 
 
@@ -351,7 +352,8 @@ def main():
     # T_base_cam = np.identity(4)
 
     # Caricamento modello YOLOv8 per Pose Estimation
-    model = YOLO(yoloModel)
+    # model = YOLO(f"{yoloModel}.pt")
+    model = YOLO(os.path.join(script_dir, f"../models/{yoloModel}.engine"), False)  # Load the exported TensorRT model
 
     # Inizializzazione ZeroMQ (Publisher)
     zctx = zmq.Context.instance()
@@ -368,7 +370,6 @@ def main():
     smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
 
     # Gestione segnali per chiusura pulita (es. CTRL+C o kill da script bash)
-    
     def signal_handler(sig, frame):
         global running
         running = False
@@ -381,37 +382,70 @@ def main():
 
         ctx = rs.context()
         devices = ctx.devices  # Query connected devices
-        pipes = []
+        trackers = []
         for i, device in enumerate(devices):
-            pipes.append(cameraStreaming(device.get_info(rs.camera_info.serial_number)))
+            trackers.append(skeletonTracker(device.get_info(rs.camera_info.serial_number), align, model, smoother, T_base_cam, pub, video_writer, i+1).start())
             print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
-        
-        # Create and start threads
-        threads = []
-        for n, pipe in enumerate(pipes):
-            thread = threading.Thread(target=skeletonTracking, args=(pipe, align, model, smoother, T_base_cam, pub, video_writer, n))
-            color_imgs.append(None) # Inizializza la lista delle immagini per la visualizzazione
-            thread.start()
-            threads.append(thread)
-
-            
 
         while running:
-            for n, color_img in enumerate(color_imgs):
-                # Mostra l'immagine a schermo (premere 'q' per uscire, anche se lo script bash lo chiuderà forzatamente)
-                if not color_img is None:
-                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", color_img)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break 
+            for n, tracker in enumerate(trackers):
+                frame = tracker.readFrame()
+                xyz, conf = tracker.readCoords()
+
+                # Trasformazione nel frame Base del Robot
+                if not xyz is None and not conf is None:
+                    # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
+                    xyz_base = transform_points(T_base_cam, xyz.astype(np.float64)).astype(np.float32)
+                    conf = conf.astype(np.float32)
+
+                    # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
+                    caps = []
+                    # Helper per validità
+                    def is_valid_kpt(k):
+                        return (conf[k] >= conf_thr) and np.all(np.isfinite(xyz_base[k]))
+
+                    # 1. Braccia: Spalla-Gomito (5-7, 6-8) e Gomito-Polso (7-9, 8-10)
+                    arm_pairs = [(5, 7), (7, 9), (6, 8), (8, 10)]
+                    for (u, v) in arm_pairs:
+                        if is_valid_kpt(u) and is_valid_kpt(v):
+                            if len(caps) >= MAX_CAPS: break
+                            pa, pb = xyz_base[u], xyz_base[v]
+                            caps.append((pa[0], pa[1], pa[2], pb[0], pb[1], pb[2], float(arms_radius), float(min(conf[u], conf[v]))))
+
+                    # 2. Busto + Testa: Unica capsula dal punto medio dei fianchi (11,12) al naso (0)
+                    if is_valid_kpt(11) and is_valid_kpt(12) and is_valid_kpt(0):
+                        if len(caps) < MAX_CAPS:
+                            p_hips = (xyz_base[11] + xyz_base[12]) * 0.5
+                            p_nose = xyz_base[0]
+                            c_torso = min(conf[11], conf[12], conf[0])
+                            caps.append((p_hips[0], p_hips[1], p_hips[2], p_nose[0], p_nose[1], p_nose[2], float(torso_radius), float(c_torso)))
+
+                    # # 5. Serializzazione e invio dati (impacchettamento e invio nel loop)
+                    # t_mono_ns = time.monotonic_ns()
+                    # # Header: Magic, Versione, Numero Capsule, Timestamp
+                    # # struct.pack(): converte i dati in una stringa di byte secondo il formato specificato
+                    # header = struct.pack(HDR_FMT, MAGIC, VERSION, len(caps), t_mono_ns)
+                    # # Payload: Lista di capsule (*rec serve a spacchettare la tupla della capsula in singoli argomenti - grazie all'asterisco -)
+                    # payload = b"".join(struct.pack(REC_FMT, *rec) for rec in caps)
+                    # # Invio messaggio completo (header + payload) (singolo messaggio atomico)
+                    # pub.send(header + payload)
+                
+                if not frame is None:
+                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
+                    # Salvataggio video
+                    if save_video and video_writer is not None:
+                        video_writer.write(frame)
+                
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
     finally:
         # Wait for both to finish
-        for thread in threads:
-            thread.join()
+        for tracker in trackers:
+            tracker.stop()
 
         # Cleanup risorse (fondamentale per non bloccare la RealSense al riavvio)
         print("Chiusura pipeline e finestre...")
-        for pipe in pipes:
-            pipe.stop()
         cv2.destroyAllWindows()
         if video_writer is not None:
             video_writer.release()
