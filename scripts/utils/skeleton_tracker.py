@@ -98,7 +98,7 @@ class SkeletonTracker:
         return self
 
     def skeleton_tracking(self, align, model, smoother, n):
-        global color_imgs, running
+        global running
         while running and self.started:
             t0 = time.time()
             

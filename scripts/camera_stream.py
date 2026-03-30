@@ -16,17 +16,20 @@ import signal
 import os
 import cv2
 import numpy as np
+import struct
 import zmq
 import pyrealsense2 as rs
 from ultralytics import YOLO
 from utils.skeleton_tracker import SkeletonTracker
 from utils.filters import Keypoints3DSmoother
 import time
+import json
 
 MAGIC = b"SKEL" 
 VERSION = 1
 HDR_FMT = "<4sHHQ"     # magic, version, n_caps, t_mono_ns )
-REC_FMT = "<8f"        # x1 y1 z1 x2 y2 z2 radius conf
+# REC_FMT = "<8f"        # x1 y1 z1 x2 y2 z2 radius conf
+REC_FMT = "<3f"
 MAX_CAPS = 32
 
 # Parameters
@@ -34,7 +37,8 @@ w_camera, h_camera = 848, 480
 running = True
 arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri)
 torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
-endpoint = "ipc:///tmp/skeleton.ipc" # Indirizzo socket ZeroMQ (IPC per comunicazione locale veloce)
+endpoint = "tcp://*:6000"
+topic = "SKEL"
 save_video = False      # Imposta a True per salvare il video, False altrimenti
 script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory where this script is located
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
@@ -72,9 +76,8 @@ def main():
 
     # Inizializzazione ZeroMQ (Publisher)
     zctx = zmq.Context.instance()
-    pub = zctx.socket(zmq.PUB) # socket di tipo Publisher (trasmette dati a chiunque sia connesso, se nessuno è connesso i dati vengono persi)
-    pub.setsockopt(zmq.LINGER, 0) # Evita che ZMQ blocchi la chiusura se ci sono messaggi pendenti
-    pub.bind(endpoint) # Associa il socket all'endpoint specificato (questo script python crea e possiede il socket, gli altri processi si connettono a questo endpoint, come il cpp del controllo ammettenza)
+    socket = zctx.socket(zmq.PUB)
+    socket.bind(endpoint)
 
     # Inizializzazione VideoWriter
     video_writer = None
@@ -117,13 +120,6 @@ def main():
                     conf = conf.astype(np.float32)
                     xyz_base_list.append((xyz_base, conf))
                     
-                    # df = px.data.iris()
-                    # fig = px.scatter_3d(df, x=xyz_base[:, 0], y=xyz_base[:, 1], z=xyz_base[:, 2], color='species')
-                    # fig = px.scatter_3d(df, x=1, y=1, z=1, color='species')
-                    # fig = px.scatter_3d(df, x=1, y=1, z=2, color='species')
-                    # fig.show()
-
-                    time.sleep(3) # Pausa per permettere a Plotly di renderizzare la figura (debug)
                 
                 if not frame is None:
                     cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
@@ -137,6 +133,18 @@ def main():
             # Misura del tempo ciclo
             tNow = time.time()
             print(f"\rTempo ciclo main: {tNow - t0:.3f} s", end="")
+
+
+            if not xyz_base_list == [] and not xyz_base_list[0][0] is None:
+                
+
+                # print(f"\nPayload JSON {type(xyz_base_list[0][0])}: {xyz_base_list[0][0]}")
+
+                payload = json.dumps(xyz_base_list[0][0].tolist()) # Converti l'array numpy in lista per JSON
+
+                message = f"{topic} {payload}"
+                socket.send_string(message)
+
 
             # # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
             # caps = []
@@ -170,6 +178,8 @@ def main():
             # # Invio messaggio completo (header + payload) (singolo messaggio atomico)
             # pub.send(header + payload)
 
+
+
     finally:
         # Wait for both to finish
         for tracker in trackers:
@@ -180,7 +190,7 @@ def main():
         cv2.destroyAllWindows()
         if video_writer is not None:
             video_writer.release()
-        pub.close()
+        socket.close()
         # ctx.term()
 
 
