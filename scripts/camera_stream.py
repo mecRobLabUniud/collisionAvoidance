@@ -24,6 +24,7 @@ from utils.skeleton_tracker import SkeletonTracker
 from utils.filters import Keypoints3DSmoother
 import time
 import json
+import pickle
 
 MAGIC = b"SKEL" 
 VERSION = 1
@@ -78,6 +79,10 @@ def main():
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.PUB)
     socket.bind(endpoint)
+
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.PUSH)
+    sock.bind("tcp://127.0.0.1:5555")
 
     # Inizializzazione VideoWriter
     video_writer = None
@@ -135,7 +140,7 @@ def main():
             print(f"\rTempo ciclo main: {tNow - t0:.3f} s", end="")
 
 
-            if not xyz_base_list == [] and not xyz_base_list[0][0] is None:
+            if not xyz_base_list == [] and not xyz_base_list[0][0] is None and not frame is None:
                 
 
                 # print(f"\nPayload JSON {type(xyz_base_list[0][0])}: {xyz_base_list[0][0]}")
@@ -144,6 +149,12 @@ def main():
 
                 message = f"{topic} {payload}"
                 socket.send_string(message)
+
+                sock.send(pickle.dumps(np.array(frame)))
+
+                # Misura del tempo ciclo
+                tNow = time.time()
+                print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")
 
             # # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
             # caps = []

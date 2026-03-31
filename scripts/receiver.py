@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 
-import zmq
-import json
+import zmq, pickle
+import cv2
+import numpy as np
+import time
 
-endpoint = "tcp://localhost:6000"
-topic = "SKEL"
 
-zctx = zmq.Context.instance()
-socket = zctx.socket(zmq.SUB)
-socket.connect(endpoint)
+ctx = zmq.Context()
+sock = ctx.socket(zmq.PULL)
+sock.connect("tcp://127.0.0.1:5555")
 
-# Subscribe to "news" topic (prefix match)
-socket.setsockopt_string(zmq.SUBSCRIBE, "SKEL")
+
 
 while True:
-    topic, message = socket.recv_string().split(" ", 1)
-    array = json.loads(message)
-    print(f"Received: {array}")
-    print(f"Type: {type(array)}")
+    arr = pickle.loads(sock.recv())
     
+
+    cv2.imshow("YOLO Skeleton Realtime Camera", arr)
+    
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
