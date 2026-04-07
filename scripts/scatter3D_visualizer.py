@@ -11,7 +11,12 @@ import signal
 import threading
 import time
 import base64
-import pickle
+from multiprocessing import shared_memory
+from PIL import Image
+import numpy as np
+import cv2
+import multiprocessing.resource_tracker as rt
+import time
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -43,14 +48,14 @@ app = Dash(__name__)
 data = None
 pic = None
 socket = None
-socket2 = None
 
+def remove_shm_from_resource_tracker(name):
+    rt.unregister(f"/{name}", "shared_memory")
 
-# Example: read with cv2
-img = cv2.imread("../prova.png")
-ctx = zmq.Context()
-sock = ctx.socket(zmq.PULL)
-sock.connect("tcp://127.0.0.1:5555")
+# Must know shape/dtype in advance (or pass via a side channel)
+H, W, C = 480, 848, 3  # adjust to match your image
+dtype = np.uint8
+
 
 
 def cv2_to_b64(img):    
@@ -68,10 +73,9 @@ def cv2_to_b64(img):
 
 
 class SkeletonVisualizer:
-    def __init__(self, socket, socket2):
+    def __init__(self, socket):
         self.started = False
         self.socket = socket
-        self.socket2 = socket2
         self.data = None
         self.mutex = threading.Lock()
         self.thread = threading.Thread(target=self.data_receiver, args=())
@@ -92,12 +96,7 @@ class SkeletonVisualizer:
             with self.mutex:
                 self.data = array
                 data = array
-
-            topic, message = self.socket2.recv_string().split(" ", 1)
-            picture = json.loads(message)
-            # print(f"Received: {array}")
-            with self.mutex:
-                pic = picture
+        quit()
 
     def read_frame(self):
         with self.mutex:
@@ -113,14 +112,28 @@ class SkeletonVisualizer:
 
 
 @app.callback([Output("graph", "figure"), Output("dynamic-img", "src")], Input('interval-component', 'n_intervals'))
+# @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     global data, pic
 
-    img = pickle.loads(sock.recv())
-    _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    img_str = base64.b64encode(buffer).decode()
+    # img = pickle.loads(sock.recv())
+    # _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    # img_str = base64.b64encode(buffer).decode()
+    # pic = f"data:image/jpeg;base64,{img_str}"
 
+    shm = shared_memory.SharedMemory(name="shared_image")
+    # remove_shm_from_resource_tracker(shm.name) 
+
+    # Read image data from shared memory
+    arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
+
+    # Make a copy before detaching (important!)
+    img_array = arr.copy()
+    _, buffer = cv2.imencode(".jpg", img_array, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    img_str = base64.b64encode(buffer).decode()
     pic = f"data:image/jpeg;base64,{img_str}"
+
+    shm.close() 
 
     t1 = time.time()
 
@@ -141,8 +154,8 @@ def update_bar_chart(n_intervals):
     fig.update_layout(scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     t3 = time.time()
-    print(f"\rTime elapsed for creating skeleton: {t3 - t2}", end=" ")
-    print(f"Time elapsed for updating figure: {t3 - t2}", end=" ")
+    # print(f"\rTime elapsed for creating skeleton: {t3 - t2}", end=" ")
+    # print(f"Time elapsed for updating figure: {t3 - t2}", end=" ")
 
     return fig, pic
 
@@ -155,18 +168,8 @@ def main():
     socket = zctx.socket(zmq.SUB)
     socket.connect(endpoint)
 
-    
-
     # Subscribe to "news" topic (prefix match)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-
-    socket2 = zctx.socket(zmq.SUB)
-    socket2.connect(endpoint)
-
-    # Subscribe to "news" topic (prefix match)
-    socket2.setsockopt_string(zmq.SUBSCRIBE, "PIC")
-
-    b64_src = cv2_to_b64(img)
 
     app.layout = html.Div([
                 html.H1('Skeleton tracking 3D scatter'),
@@ -176,7 +179,7 @@ def main():
                     style={"display": "flex", "width": "100%"}),
                 dcc.Interval(
                         id='interval-component',
-                        interval=100, # in milliseconds
+                        interval=30, # in milliseconds
                         n_intervals=0)], 
                 id = "change-height", 
                 style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
@@ -189,17 +192,11 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Launch data receiver thread and load the Dash interface
-    vis = SkeletonVisualizer(socket, socket2).start()
+    vis = SkeletonVisualizer(socket).start()
     #vis.load_interface()
 
+    app.run(debug=True, port=8004)
 
-
-    
-    
-
-    print("Sta partendo")
-    app.run(debug=True, port=8008)
-    print("Partito")
 
 
     

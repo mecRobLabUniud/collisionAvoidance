@@ -24,7 +24,17 @@ from utils.skeleton_tracker import SkeletonTracker
 from utils.filters import Keypoints3DSmoother
 import time
 import json
-import pickle
+from multiprocessing import shared_memory
+from PIL import Image
+import numpy as np
+import time
+import cv2
+import pyrealsense2 as rs
+from ultralytics import YOLO
+from utils.skeleton_tracker import SkeletonTracker
+from utils.filters import Keypoints3DSmoother
+import os
+import signal 
 
 MAGIC = b"SKEL" 
 VERSION = 1
@@ -40,7 +50,7 @@ arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri
 torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
 endpoint = "tcp://*:6000"
 topic = "SKEL"
-save_video = True      # Imposta a True per salvare il video, False altrimenti
+save_video = False      # Imposta a True per salvare il video, False altrimenti
 script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory where this script is located
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
 yolo_model = "yolo26n-pose" # "yolov8x-pose.pt"
@@ -80,10 +90,6 @@ def main():
     socket = zctx.socket(zmq.PUB)
     socket.bind(endpoint)
 
-    ctx = zmq.Context()
-    sock = ctx.socket(zmq.PUSH)
-    sock.bind("tcp://127.0.0.1:5555")
-
     # Inizializzazione VideoWriter
     video_writer = None
     if save_video:
@@ -110,6 +116,19 @@ def main():
             trackers.append(SkeletonTracker(device.get_info(rs.camera_info.serial_number), align, model, smoother, i+1).start())
             print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
             
+
+        frame = trackers[0].read_frame()
+        while frame is None:
+            frame = trackers[0].read_frame()
+
+        # Store shape info so receiver knows dimensions
+        shape = frame.shape  # (H, W, 3)
+        dtype = frame.dtype
+
+        # Create shared memory block
+        shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image")
+
+
         while running:
             t0 = time.time()
             xyz_base_list = []
@@ -117,6 +136,13 @@ def main():
             for n, tracker in enumerate(trackers):
                 frame = tracker.read_frame()
                 xyz, conf = tracker.read_coords()
+
+                # Create shared memory block
+                shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name="shared_image")
+
+                # Write image data into shared memory
+                buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+                buf[:] = frame[:]
 
                 # Trasformazione nel frame Base del Robot
                 if not xyz is None and not conf is None:
@@ -142,16 +168,10 @@ def main():
 
 
             if not xyz_base_list == [] and not xyz_base_list[0][0] is None and not frame is None:
-                
-
-                # print(f"\nPayload JSON {type(xyz_base_list[0][0])}: {xyz_base_list[0][0]}")
-
                 payload = json.dumps(xyz_base_list[0][0].tolist()) # Converti l'array numpy in lista per JSON
 
                 message = f"{topic} {payload}"
                 socket.send_string(message)
-
-                # sock.send(pickle.dumps(np.array(frame)))
 
                 # Misura del tempo ciclo
                 tNow = time.time()
@@ -189,6 +209,8 @@ def main():
             # # Invio messaggio completo (header + payload) (singolo messaggio atomico)
             # pub.send(header + payload)
 
+        shm.close()
+        shm.unlink()  # Delete the shared memory block
 
 
     finally:
