@@ -10,6 +10,7 @@ from ultralytics import YOLO
 from utils.skeleton_tracker import SkeletonTracker
 from utils.filters import Keypoints3DSmoother
 import os
+import signal 
 
 
 w_camera, h_camera = 848, 480
@@ -39,8 +40,7 @@ while frame is None:
     pass
 
 
-print(frame)
-# cv2.imshow(f"YOLO Skeleton Realtime Camera 0", frame)
+cv2.imshow(f"YOLO Skeleton Realtime Camera 0", frame)
 
 
 
@@ -62,7 +62,29 @@ print("Press Ctrl+C to release shared memory...")
 
 try:
     while True:
-        time.sleep(1)
+        t0 = time.time()
+        # time.sleep(1)
+
+        frame = tracker.read_frame()
+        while frame is None:
+            frame = tracker.read_frame()
+            pass
+
+
+        cv2.imshow(f"YOLO Skeleton Realtime Camera 0", frame)
+
+
+
+        # Create shared memory block
+        shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name="shared_image")
+
+
+        # Write image data into shared memory
+        buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+        buf[:] = frame[:]
+
+        t1 = time.time()
+        print(f"\rElapsed time: {t1-t0} s", end=" ")
 finally:
     shm.close()
     shm.unlink()  # Delete the shared memory block

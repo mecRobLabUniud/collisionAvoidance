@@ -40,7 +40,7 @@ arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri
 torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
 endpoint = "tcp://*:6000"
 topic = "SKEL"
-save_video = False      # Imposta a True per salvare il video, False altrimenti
+save_video = True      # Imposta a True per salvare il video, False altrimenti
 script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory where this script is located
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
 yolo_model = "yolo26n-pose" # "yolov8x-pose.pt"
@@ -129,8 +129,9 @@ def main():
                 if not frame is None:
                     cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
                     # Salvataggio video
-                    if save_video and video_writer is not None:
-                        video_writer.write(frame)
+                    if n == 0:
+                        if save_video and video_writer is not None:
+                            video_writer.write(frame)
                 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -150,7 +151,7 @@ def main():
                 message = f"{topic} {payload}"
                 socket.send_string(message)
 
-                sock.send(pickle.dumps(np.array(frame)))
+                # sock.send(pickle.dumps(np.array(frame)))
 
                 # Misura del tempo ciclo
                 tNow = time.time()
@@ -206,4 +207,5 @@ def main():
 
 
 if __name__ == "__main__":
+    time.sleep(2)
     main()

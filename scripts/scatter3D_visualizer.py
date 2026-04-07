@@ -198,7 +198,7 @@ def main():
     
 
     print("Sta partendo")
-    app.run(debug=True, port=8000)
+    app.run(debug=True, port=8008)
     print("Partito")
 
 
