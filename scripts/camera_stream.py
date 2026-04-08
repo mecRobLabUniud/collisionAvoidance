@@ -152,20 +152,15 @@ def main():
                     xyz_base_list.append((xyz_base, conf))
                     
                 
-                if not frame is None:
-                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
-                    # Salvataggio video
-                    if n == 0:
-                        if save_video and video_writer is not None:
-                            video_writer.write(frame)
-                
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
-            # Misura del tempo ciclo
-            tNow = time.time()
-            print(f"\rTempo ciclo main: {tNow - t0:.3f} s", end="")
-
+                # if not frame is None:
+                #     cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
+                #     # Salvataggio video
+                #     if n == 0:
+                #         if save_video and video_writer is not None:
+                #             video_writer.write(frame)
+                # 
+                # if cv2.waitKey(1) & 0xFF == ord('q'):
+                #     break
 
             if not xyz_base_list == [] and not xyz_base_list[0][0] is None and not frame is None:
                 payload = json.dumps(xyz_base_list[0][0].tolist()) # Converti l'array numpy in lista per JSON
