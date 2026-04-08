@@ -60,7 +60,7 @@ dtype = np.uint8
 
 def cv2_to_b64(img):    
     """Convert OpenCV image to base64 data URI."""
-    is_success, buffer = cv2.imencode(".png", img)
+    is_success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
     if not is_success: return None
     encoded = base64.b64encode(buffer).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
@@ -115,27 +115,17 @@ class SkeletonVisualizer:
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     global data, pic
-
-    # img = pickle.loads(sock.recv())
-    # _, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    # img_str = base64.b64encode(buffer).decode()
-    # pic = f"data:image/jpeg;base64,{img_str}"
-
-    shm = shared_memory.SharedMemory(name="shared_image")
-    # remove_shm_from_resource_tracker(shm.name) 
+    t1 = time.time()
 
     # Read image data from shared memory
+    shm = shared_memory.SharedMemory(name="shared_image")
+    # remove_shm_from_resource_tracker(shm.name) 
     arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
-
-    # Make a copy before detaching (important!)
-    img_array = arr.copy()
-    _, buffer = cv2.imencode(".jpg", img_array, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    img_str = base64.b64encode(buffer).decode()
-    pic = f"data:image/jpeg;base64,{img_str}"
-
+    img = arr.copy()
+    pic = cv2_to_b64(img)
     shm.close() 
 
-    t1 = time.time()
+    t2 = time.time()
 
     x = []
     y = []
@@ -149,13 +139,11 @@ def update_bar_chart(n_intervals):
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='lines')
 
-    t2 = time.time()
-
     fig.update_layout(scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     t3 = time.time()
-    # print(f"\rTime elapsed for creating skeleton: {t3 - t2}", end=" ")
-    # print(f"Time elapsed for updating figure: {t3 - t2}", end=" ")
+    print(f"\rTime elapsed for receiving image: {t2 - t1}", end=" ")
+    print(f"Time elapsed for updating figure: {t3 - t2}", end=" ")
 
     return fig, pic
 
@@ -196,13 +184,6 @@ def main():
     #vis.load_interface()
 
     app.run(debug=True, port=8004)
-
-
-
-    
-    
-
-    # socket.close()
 
 
 
