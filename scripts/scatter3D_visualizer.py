@@ -72,7 +72,7 @@ def cv2_to_b64(img):
 
 
 
-class SkeletonVisualizer:
+"""class SkeletonVisualizer:
     def __init__(self, socket):
         self.started = False
         self.socket = socket
@@ -104,7 +104,7 @@ class SkeletonVisualizer:
         return frame
     
     def load_interface(self):
-        app.run(debug=True)
+        app.run(debug=True)"""
 
 
 
@@ -114,11 +114,11 @@ class SkeletonVisualizer:
 @app.callback([Output("graph", "figure"), Output("dynamic-img", "src")], Input('interval-component', 'n_intervals'))
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
-    global data, pic
+    # global data, pic
     t1 = time.time()
 
     # Read image data from shared memory
-    shm = shared_memory.SharedMemory(name="shared_image")
+    shm = shared_memory.SharedMemory(name="shared_image1")
     # remove_shm_from_resource_tracker(shm.name) 
     arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
     img = arr.copy()
@@ -126,6 +126,12 @@ def update_bar_chart(n_intervals):
     shm.close() 
 
     t2 = time.time()
+
+    global socket
+    topic, message = socket.recv_string().split(" ", 1)
+    data = json.loads(message)
+
+    print(message)
 
     x = []
     y = []
@@ -142,8 +148,7 @@ def update_bar_chart(n_intervals):
     fig.update_layout(scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     t3 = time.time()
-    print(f"\rTime elapsed for receiving image: {t2 - t1}", end=" ")
-    print(f"Time elapsed for updating figure: {t3 - t2}", end=" ")
+    # print(f"\rTime elapsed for updating figure: {t3 - t2}", end=" ")
 
     return fig, pic
 
@@ -173,17 +178,17 @@ def main():
                 style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
 
     # Gestione segnali per chiusura pulita (es. CTRL+C o kill da script bash)
-    def signal_handler(sig, frame):
-        global running
-        running = False
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # def signal_handler(sig, frame):
+    #     global running
+    #     running = False
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTERM, signal_handler)
 
     # Launch data receiver thread and load the Dash interface
-    vis = SkeletonVisualizer(socket).start()
+    # vis = SkeletonVisualizer(socket).start()
     #vis.load_interface()
 
-    app.run(debug=True, port=8004)
+    app.run(debug=True, port=8001)
 
 
 
