@@ -8,6 +8,7 @@ import cv2
 import zmq
 import json
 import webbrowser
+import signal
 import threading
 import time
 import base64
@@ -109,6 +110,15 @@ def cv2_to_b64(img):
 
 
 
+def data_receiver(socket):
+    global running, data
+    while running:
+        topic, message = socket.recv_string().split(" ", 1)
+        data = json.loads(message)
+        print(data)
+
+        
+
 
 @app.callback([Output("graph", "figure"), Output("dynamic-img", "src")], Input('interval-component', 'n_intervals'))
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
@@ -125,9 +135,7 @@ def update_bar_chart(n_intervals):
 
     t2 = time.time()
 
-    topic, message = socket.recv_string().split(" ", 1)
-    array = json.loads(message)
-    data = array
+    global data
 
     x = []
     y = []
@@ -144,7 +152,7 @@ def update_bar_chart(n_intervals):
     fig.update_layout(scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     t3 = time.time()
-    print(f"\rTime elapsed {t2 - t1} - {t3 - t2}", end=" ")
+    # print(f"\rTime elapsed {t2 - t1} - {t3 - t2}", end=" ")
 
     return fig, pic
 
@@ -173,15 +181,20 @@ def main():
                 style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
 
     # Gestione segnali per chiusura pulita (es. CTRL+C o kill da script bash)
-    """def signal_handler(sig, frame):
-        global running
-        running = False
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)"""
+    # def signal_handler(sig, frame):
+    #     global running
+    #     running = False
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTERM, signal_handler)
+
+    thread = threading.Thread(target=data_receiver, args=(socket,))
+    thread.start()
 
     webbrowser.open_new('http://127.0.0.1:5000/')
 
     app.run(debug=True, port=5000)
+
+    thread.join()
 
 
 

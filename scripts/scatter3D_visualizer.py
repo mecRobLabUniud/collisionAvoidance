@@ -17,6 +17,7 @@ import numpy as np
 import cv2
 import multiprocessing.resource_tracker as rt
 import time
+import webbrowser
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -72,7 +73,7 @@ def cv2_to_b64(img):
 
 
 
-"""class SkeletonVisualizer:
+class SkeletonVisualizer:
     def __init__(self, socket):
         self.started = False
         self.socket = socket
@@ -96,15 +97,16 @@ def cv2_to_b64(img):
             with self.mutex:
                 self.data = array
                 data = array
-        quit()
 
     def read_frame(self):
         with self.mutex:
             frame = self.data.copy() if self.data is not None else None
         return frame
     
-    def load_interface(self):
-        app.run(debug=True)"""
+    def stop(self):
+        self.started = False
+        self.thread.join()
+        return self
 
 
 
@@ -118,8 +120,8 @@ def update_bar_chart(n_intervals):
     t1 = time.time()
 
     # Read image data from shared memory
-    shm = shared_memory.SharedMemory(name="shared_image1")
-    # remove_shm_from_resource_tracker(shm.name) 
+    shm = shared_memory.SharedMemory(name="shared_image0")
+    remove_shm_from_resource_tracker(shm.name) 
     arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
     img = arr.copy()
     pic = cv2_to_b64(img)
@@ -127,11 +129,7 @@ def update_bar_chart(n_intervals):
 
     t2 = time.time()
 
-    global socket
-    topic, message = socket.recv_string().split(" ", 1)
-    data = json.loads(message)
-
-    print(message)
+    global data
 
     x = []
     y = []
@@ -185,10 +183,14 @@ def main():
     # signal.signal(signal.SIGTERM, signal_handler)
 
     # Launch data receiver thread and load the Dash interface
-    # vis = SkeletonVisualizer(socket).start()
+    vis = SkeletonVisualizer(socket).start()
     #vis.load_interface()
 
-    app.run(debug=True, port=8001)
+    webbrowser.open_new('http://127.0.0.1:5000/')
+
+    app.run(debug=True, port=5000)
+
+    vis.stop()
 
 
 
