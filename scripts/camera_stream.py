@@ -126,19 +126,19 @@ def main():
         dtype = frame.dtype
 
         # Create shared memory block
-        shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image")
+        shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image0")
+        # shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image1")
 
-
+        aaa = 0
         while running:
             t0 = time.time()
             xyz_base_list = []
-            aaa = 0.1
             for n, tracker in enumerate(trackers):
                 frame = tracker.read_frame()
                 xyz, conf = tracker.read_coords()
 
                 # Create shared memory block
-                shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name="shared_image")
+                shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name=f"shared_image{n}")
 
                 # Write image data into shared memory
                 buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
@@ -170,8 +170,12 @@ def main():
 
                 # Misura del tempo ciclo
                 tNow = time.time()
-                print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")
+                # print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")
 
+                # print(message)
+
+
+            # time.sleep(0.1)
             # # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
             # caps = []
             # # Helper per validità

@@ -7,6 +7,7 @@ import plotly.graph_objs as go
 import cv2
 import zmq
 import json
+import webbrowser
 import signal
 import threading
 import time
@@ -17,7 +18,6 @@ import numpy as np
 import cv2
 import multiprocessing.resource_tracker as rt
 import time
-import webbrowser
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -46,8 +46,7 @@ camera = dict(
 
 app = Dash(__name__)
 
-data = None
-pic = None
+
 socket = None
 
 def remove_shm_from_resource_tracker(name):
@@ -73,7 +72,7 @@ def cv2_to_b64(img):
 
 
 
-class SkeletonVisualizer:
+"""class SkeletonVisualizer:
     def __init__(self, socket):
         self.started = False
         self.socket = socket
@@ -97,26 +96,33 @@ class SkeletonVisualizer:
             with self.mutex:
                 self.data = array
                 data = array
+        quit()
 
     def read_frame(self):
         with self.mutex:
             frame = self.data.copy() if self.data is not None else None
         return frame
     
-    def stop(self):
-        self.started = False
-        self.thread.join()
-        return self
+    def load_interface(self):
+        app.run(debug=True)"""
 
 
 
 
+
+def data_receiver(socket):
+    global running, data
+    while running:
+        topic, message = socket.recv_string().split(" ", 1)
+        data = json.loads(message)
+        print(data)
+
+        
 
 
 @app.callback([Output("graph", "figure"), Output("dynamic-img", "src")], Input('interval-component', 'n_intervals'))
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
-    # global data, pic
     t1 = time.time()
 
     # Read image data from shared memory
@@ -146,7 +152,7 @@ def update_bar_chart(n_intervals):
     fig.update_layout(scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     t3 = time.time()
-    # print(f"\rTime elapsed for updating figure: {t3 - t2}", end=" ")
+    # print(f"\rTime elapsed {t2 - t1} - {t3 - t2}", end=" ")
 
     return fig, pic
 
@@ -157,10 +163,9 @@ def main():
     global socket
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
-    socket.connect(endpoint)
-
-    # Subscribe to "news" topic (prefix match)
+    socket.setsockopt(zmq.CONFLATE, 1)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    socket.connect(endpoint)
 
     app.layout = html.Div([
                 html.H1('Skeleton tracking 3D scatter'),
@@ -170,7 +175,7 @@ def main():
                     style={"display": "flex", "width": "100%"}),
                 dcc.Interval(
                         id='interval-component',
-                        interval=30, # in milliseconds
+                        interval=50, # in milliseconds
                         n_intervals=0)], 
                 id = "change-height", 
                 style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
@@ -182,15 +187,14 @@ def main():
     # signal.signal(signal.SIGINT, signal_handler)
     # signal.signal(signal.SIGTERM, signal_handler)
 
-    # Launch data receiver thread and load the Dash interface
-    vis = SkeletonVisualizer(socket).start()
-    #vis.load_interface()
+    thread = threading.Thread(target=data_receiver, args=(socket,))
+    thread.start()
 
     webbrowser.open_new('http://127.0.0.1:5000/')
 
     app.run(debug=True, port=5000)
 
-    vis.stop()
+    thread.join()
 
 
 
