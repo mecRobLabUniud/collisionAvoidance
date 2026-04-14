@@ -48,7 +48,7 @@ app = Dash(__name__)
 
 data = None
 pic = None
-socket = None
+interfaces = None
 
 def remove_shm_from_resource_tracker(name):
     rt.unregister(f"/{name}", "shared_memory")
@@ -74,9 +74,16 @@ def cv2_to_b64(img):
 
 
 class SkeletonVisualizer:
-    def __init__(self, socket):
-        self.started = False
+    def __init__(self, n):
+        zctx = zmq.Context.instance()
+        socket = zctx.socket(zmq.SUB)
+        socket.setsockopt(zmq.CONFLATE, 1)
+        socket.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
+        socket.connect(endpoint)
         self.socket = socket
+
+        self.n_device = n
+        self.started = False
         self.data = None
         self.mutex = threading.Lock()
         self.thread = threading.Thread(target=self.data_receiver, args=())
@@ -89,16 +96,16 @@ class SkeletonVisualizer:
         return self
 
     def data_receiver(self):
-        global running, data, pic
+        global running
         while running:
-            topic, message = self.socket.recv_string().split(" ", 1)
+            _, _, message = self.socket.recv_string().split(" ", 2)
             array = json.loads(message)
-            # print(f"Received: {array}")
+
             with self.mutex:
                 self.data = array
-                data = array
 
-    def read_frame(self):
+    def read_skeleton(self):
+        print(f"Reading thread {self.n_device}")
         with self.mutex:
             frame = self.data.copy() if self.data is not None else None
         return frame
@@ -106,6 +113,7 @@ class SkeletonVisualizer:
     def stop(self):
         self.started = False
         self.thread.join()
+        self.socket.close()
         return self
 
 
@@ -120,7 +128,7 @@ def update_bar_chart(n_intervals):
     t1 = time.time()
 
     # Read image data from shared memory
-    shm = shared_memory.SharedMemory(name="shared_image0")
+    shm = shared_memory.SharedMemory(name="shared_image")
     remove_shm_from_resource_tracker(shm.name) 
     arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
     img = arr.copy()
@@ -154,19 +162,24 @@ def update_bar_chart(n_intervals):
 
 # Main loop to receive data via ZeroMQ and update the plot
 def main():
-    global socket
+    global interfaces
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
-    socket.connect(endpoint)
-
-    # Subscribe to "news" topic (prefix match)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    socket.connect(endpoint)
+    s, n_devices, _ = socket.recv_string().split(" ", 2)
+    socket.close()
+
+    interfaces = []
+    for n in range(int(n_devices)):
+        interface = SkeletonVisualizer(n).start()
+        interfaces.append(interface)
 
     app.layout = html.Div([
                 html.H1('Skeleton tracking 3D scatter'),
                 html.Div([
                     dcc.Graph(id="graph"),
-                    html.Img(id="dynamic-img", style={"height": "300px"})],
+                    html.Img(id="dynamic-img", style={"height": "300px", "width": "100%", "margin": "20 20 20 20"})],
                     style={"display": "flex", "width": "100%"}),
                 dcc.Interval(
                         id='interval-component',
@@ -183,14 +196,24 @@ def main():
     # signal.signal(signal.SIGTERM, signal_handler)
 
     # Launch data receiver thread and load the Dash interface
-    vis = SkeletonVisualizer(socket).start()
-    #vis.load_interface()
+    # vis = SkeletonVisualizer(socket).start()
+    # #vis.load_interface()
+# 
+    # webbrowser.open_new('http://127.0.0.1:5000/')
+# 
+    # app.run(debug=True, port=5000)
+# 
+    # vis.stop()
 
-    webbrowser.open_new('http://127.0.0.1:5000/')
+    time.sleep(3)
 
-    app.run(debug=True, port=5000)
+    for interface in interfaces:
+        print(interface.read_skeleton())
 
-    vis.stop()
+    for interface in interfaces:
+        interface.stop()
+
+
 
 
 

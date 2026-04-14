@@ -112,33 +112,34 @@ def main():
         ctx = rs.context()
         devices = ctx.devices  # Query connected devices
         trackers = []
+        shms = []
         for i, device in enumerate(devices):
-            trackers.append(SkeletonTracker(device.get_info(rs.camera_info.serial_number), align, model, smoother, i+1).start())
+            # Create tracker block
+            tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), align, model, smoother, i+1).start()
+            trackers.append(tracker)
+
+            frame = None
+            while frame is None:
+                frame = tracker.read_frame()
+            shape = frame.shape
+            dtype = frame.dtype
+
+            # Create shared memory block
+            shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name=f"shared_image_{i}")
+            shms.append(shm)
+
             print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
             
-
-        frame = trackers[0].read_frame()
-        while frame is None:
-            frame = trackers[0].read_frame()
-
-        # Store shape info so receiver knows dimensions
-        shape = frame.shape  # (H, W, 3)
-        dtype = frame.dtype
-
-        # Create shared memory block
-        shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image0")
-        # shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image1")
-
-        aaa = 0
+        # Data acquisition main loop
         while running:
             t0 = time.time()
             xyz_base_list = []
-            for n, tracker in enumerate(trackers):
+            for n, (tracker, shm) in enumerate(zip(trackers, shms)):
                 frame = tracker.read_frame()
                 xyz, conf = tracker.read_coords()
 
-                # Create shared memory block
-                shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name=f"shared_image{n}")
+                # # Create shared memory block
+                # shm = shared_memory.SharedMemory(create=False, size=frame.nbytes, name="shared_image")
 
                 # Write image data into shared memory
                 buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
@@ -149,9 +150,14 @@ def main():
                     # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
                     xyz_base = transform_points(T_base_cam, xyz.astype(np.float64)).astype(np.float32)
                     conf = conf.astype(np.float32)
-                    xyz_base_list.append((xyz_base, conf))
+                    # xyz_base_list.append((xyz_base, conf))
+
+                    payload = (xyz_base, conf)
+                    message = f"{topic}_{n} {len(devices)} {json.dumps(payload[0].tolist())}"  # Still have to add conf
+                    socket.send_string(message)
                     
-                
+            time.sleep(2)
+
                 # if not frame is None:
                 #     cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
                 #     # Salvataggio video
@@ -162,7 +168,7 @@ def main():
                 # if cv2.waitKey(1) & 0xFF == ord('q'):
                 #     break
 
-            if not xyz_base_list == [] and not xyz_base_list[0][0] is None and not frame is None:
+            """if not xyz_base_list == [] and not xyz_base_list[0][0] is None and not frame is None:
                 payload = json.dumps(xyz_base_list[0][0].tolist()) # Converti l'array numpy in lista per JSON
 
                 message = f"{topic} {payload}"
@@ -170,12 +176,8 @@ def main():
 
                 # Misura del tempo ciclo
                 tNow = time.time()
-                # print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")
+                print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")"""
 
-                # print(message)
-
-
-            # time.sleep(0.1)
             # # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
             # caps = []
             # # Helper per validità

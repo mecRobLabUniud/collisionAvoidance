@@ -19,6 +19,7 @@ import io
 import pyvista as pv
 from flask_socketio import SocketIO
 from dash import Dash, dcc, html, Input, Output
+import threading
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -39,6 +40,8 @@ endpoint = "tcp://localhost:6000"
 topic = "SKEL"
 socket = None
 thread = None
+data = None
+running = True
 
 app = Flask(__name__)
 
@@ -49,54 +52,6 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 def remove_shm_from_resource_tracker(name):
     rt.unregister(f"/{name}", "shared_memory")
-
-
-
-"""def make_3d_plot(x, y, z, title="3D Plot"):
-    global socket
-
-    topic, message = socket.recv_string().split(" ", 1)
-    array = json.loads(message)
-    data = array
-
-    x = []
-    y = []
-    z = []
-    for [*pnt] in data:
-        x.append(pnt[0])
-        y.append(pnt[1])
-        z.append(pnt[2])
-
-    return fig
-
-
-
-def cv2_to_b64(img):
-    is_success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    if not is_success:
-        return None
-    encoded = base64.b64encode(buffer).decode("utf-8")
-    return encoded # "data:image/jpeg;base64," + encoded
-
-
-
-@app.route("/image")
-def stream():
-    # Read image data from shared memory
-    shm = shared_memory.SharedMemory(name="shared_image")
-    remove_shm_from_resource_tracker(shm.name)
-
-    arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
-    img = arr.copy()
-    pic = cv2_to_b64(img)
-    shm.close()
-    return jsonify({"image": pic})
-
-
-
-@app.route("/plot")
-def scatter3D_plot():
-    pass"""
 
 
 
@@ -142,18 +97,18 @@ def stream():
         shm.close()
 
         socketio.emit('update_stream', {'frame': pic})
-        socketio.sleep(0.01)  # ~60 FPS
+        socketio.sleep(0.05)  # ~60 FPS
 
 
 
 # Visualize real-time scatter data
 def background_task():    
-    global socket
+    global data, socket
 
     while True:
-        topic, message = socket.recv_string().split(" ", 1)
-        array = json.loads(message)
-        data = array
+        # topic, message = socket.recv_string().split(" ", 1)
+        # array = json.loads(message)
+        # data = array
 
         x = []
         y = []
@@ -165,20 +120,59 @@ def background_task():
                 z.append(pnt[2])
 
         socketio.emit('update_scatter', {'x': x, 'y': y, 'z': z})
-        socketio.sleep(0.01)  # ~60 FPS
+        socketio.sleep(0.02)  # ~60 FPS
 
 
 
 @socketio.on('connect')
 def handle_connect():
     socketio.start_background_task(background_task)
-    socketio.start_background_task(stream)
+    # socketio.start_background_task(stream)
 
 
 
 @app.route("/")
 def index():
     return render_template("test_2.html")
+
+
+
+
+class SkeletonVisualizer:
+    def __init__(self, socket):
+        self.started = False
+        self.socket = socket
+        self.data = None
+        self.mutex = threading.Lock()
+        self.thread = threading.Thread(target=self.data_receiver, args=())
+
+    def start(self):
+        if self.started:
+            return
+        self.started = True
+        self.thread.start()
+        return self
+
+    def data_receiver(self):
+        global running, data, pic
+        while running:
+            topic, message = self.socket.recv_string().split(" ", 1)
+            array = json.loads(message)
+            # print(f"Received: {array}")
+            with self.mutex:
+                self.data = array
+                data = array
+
+    def read_frame(self):
+        with self.mutex:
+            frame = self.data.copy() if self.data is not None else None
+        return frame
+    
+    def stop(self):
+        self.started = False
+        self.thread.join()
+        return self
+    
 
 
 
@@ -192,9 +186,11 @@ def main():
 
     webbrowser.open_new('http://127.0.0.1:5000/')
 
-    # socketio.start_background_task(background_task)
-    # socketio.start_background_task(stream)
+    vis = SkeletonVisualizer(socket).start()
+
     socketio.run(app, host="127.0.0.1", port=5000)
+
+    vis.stop()
 
 
 

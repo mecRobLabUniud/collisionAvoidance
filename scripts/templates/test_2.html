@@ -15,7 +15,7 @@
             <div id="plot" style="width:100%; height:100%;"></div>
             <script> 
                 const socket = io();
-                socket.on('update_scatter', function(point) {
+                socket.on('update_scatter', async function(point) {
                     const graph = {
                         x: point.x,
                         y: point.y,
@@ -35,9 +35,14 @@
                     const layout = {
                         title: '3D Scatter Plot Example',
                         scene: {
-                            xaxis: { title: 'X Axis' },
-                            yaxis: { title: 'Y Axis' },
-                            zaxis: { title: 'Z Axis' }
+                            xaxis: { title: 'X Axis', range: [-2, 2]},
+                            yaxis: { title: 'Y Axis', range: [-2, 2]},
+                            zaxis: { title: 'Z Axis', range: [-2, 2]}
+                        },
+                        camera: {
+                            up: {x: 0, y: 0, z: 1},
+                            center: {x: 0, y: 0, z: -0.1},
+                            eye: {x: 1.5, y: 1.5, z: 0.1}
                         },
                         margin: { l: 0, r: 0, b: 0, t: 50 }
                     };
