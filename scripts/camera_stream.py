@@ -127,7 +127,7 @@ def main():
 
         # Create shared memory block
         shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image0")
-        shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image1")
+        # shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name="shared_image1")
 
         aaa = 0
         while running:
@@ -172,10 +172,10 @@ def main():
                 tNow = time.time()
                 # print(f"\rTempo del nuovo ciclo main: {tNow - t0:.3f} s", end="")
 
-                print(message)
+                # print(message)
 
 
-            time.sleep(2)
+            # time.sleep(0.1)
             # # --- MODIFICA: Capsule semplificate (Braccia + Busto/Testa unico) ---
             # caps = []
             # # Helper per validità

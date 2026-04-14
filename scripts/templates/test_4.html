@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="stream">
+        <h2>Streaming</h2>
+        <img id="image" src="">
+        <script>
+            const socket1 = io();
+            socket1.on('update_stream', function(data) {
+                img = document.getElementById("image");
+                img.src = "data:image/png;base64," + data.frame;;
+            });
+
+            // function fetchImage() {
+            //     fetch("/image")
+            //         .then(res => res.json())
+            //         .then(data => {
+            //             const img = document.getElementById("image");
+            //             img.src = "data:image/png;base64," + data.image;
+            //         });
+            // }
+            // setInterval(fetchImage, 20);
+            // fetchImage();  // first load
+        </script>
+    </div>
+
+    <h1 id="title">PLOT</h1>
+    <script>
+        // Core setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        camera.position.z = 5;
+
+        // Generate scatter data (x,y,z positions)
+        const numPoints = 5000;
+        const positions = new Float32Array(numPoints * 3);
+        // for (let i = 0; i < numPoints; i++) {
+        //     positions[i * 3] = (Math.random() - 0.5) * 10;     // x
+        //     positions[i * 3 + 1] = (Math.random() - 0.5) * 10; // y
+        //     positions[i * 3 + 2] = (Math.random() - 0.5) * 10; // z
+        // }
+
+        const geometry = new THREE.BufferGeometry();
+        const socket = io();
+        socket.on('update_scatter', function(data) {
+            const newPos = new Float32Array(data.positions.flat());
+            ttl = document.getElementById("title");
+            ttl.innerText = newPos;
+            geometry.setAttribute('position', new THREE.BufferAttribute(newPos, 3));
+            geometry.attributes.position.needsUpdate = true;  // Efficient update
+            geometry.computeBoundingSphere();
+        });
+
+        
+        // geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        // Optional: colors per point
+        const colors = new Float32Array(numPoints * 3);
+        for (let i = 0; i < numPoints * 3; i += 3) {
+            colors[i] = Math.random();     // r
+            colors[i + 1] = Math.random(); // g
+            colors[i + 2] = Math.random(); // b
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({ 
+            size: 0.05, 
+            vertexColors: true, 
+            sizeAttenuation: true  // Points scale with distance
+        });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // points.rotation.y += 0.005;  // Rotate for demo
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tracking</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+</head>
+<body>
+    <h1 style="font-size:50px;">Skeleton tracking with Realsense cameras</h1>
+    <div style="display:flex; height:1500px">
+        <div class="3Dplot" style="width:50%; height:100%">
+            <h2 style="font-size:30px;">3D plot</h2>
+            <div id="plot" style="width:100%; height:100%;"></div>
+            <script> 
+                const socket = io();
+                socket.on('update_scatter', function(point) {
+                    const graph = {
+                        x: point.x,
+                        y: point.y,
+                        z: point.z,
+                        mode: 'markers',
+                        marker: {
+                            size: 12,
+                            color: 'rgb(255, 0, 0)',
+                            line: { color: 'rgba(217, 217, 217, 0.14)', width: 0.5 },
+                            opacity: 0.8
+                        },
+                        type: 'scatter3d',
+                        name: 'Cluster 1'
+                    };
+
+                    const data = [graph];
+                    const layout = {
+                        title: '3D Scatter Plot Example',
+                        scene: {
+                            xaxis: { title: 'X Axis' },
+                            yaxis: { title: 'Y Axis' },
+                            zaxis: { title: 'Z Axis' }
+                        },
+                        margin: { l: 0, r: 0, b: 0, t: 50 }
+                    };
+
+                    Plotly.newPlot('plot', data, layout);
+                });
+            </script>
+        </div>
+
+        <div class="stream" style="width:50%; height:100%">
+            <h2 style="font-size:30px;">Streaming</h2>
+            <img id="image" src="">
+            <script>
+                const socket1 = io();
+                socket1.on('update_stream', function(data) {
+                    img = document.getElementById("image");
+                    img.src = "data:image/png;base64," + data.frame;
+                });
+            </script>
+        </div>
+    </div>
+</body>
+</html>
