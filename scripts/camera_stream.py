@@ -155,8 +155,6 @@ def main():
                     payload = (xyz_base, conf)
                     message = f"{topic}_{n} {len(devices)} {json.dumps(payload[0].tolist())}"  # Still have to add conf
                     socket.send_string(message)
-                    
-            time.sleep(2)
 
                 # if not frame is None:
                 #     cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
