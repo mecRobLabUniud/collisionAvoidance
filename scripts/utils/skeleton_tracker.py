@@ -79,7 +79,7 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
 
 # Class for tracking skeletons from RealSense camera, applying YOLOv8-Pose for keypoint detection, and using Keypoints3DSmoother for temporal smoothing and occlusion handling
 class SkeletonTracker:
-    def __init__(self, device, align, model, smoother, n):
+    def __init__(self, device):
         self.device = device
         self.pipe = camera_streaming(self.device)
         self.frame = None
@@ -87,17 +87,17 @@ class SkeletonTracker:
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
-        self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.skeleton_tracking, args=(align, model, smoother, n))
 
-    def start(self):
+    def start(self, align, model, smoother):
+        self.mutex = threading.Lock()
+        self.thread = threading.Thread(target=self.skeleton_tracking, args=(align, model, smoother))
         if self.started:
             return
         self.started = True
         self.thread.start()
         return self
 
-    def skeleton_tracking(self, align, model, smoother, n):
+    def skeleton_tracking(self, align, model, smoother):
         global running
         while running and self.started:
             t0 = time.time()
@@ -163,16 +163,34 @@ class SkeletonTracker:
                     if conf[k] >= conf_thr:
                         cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 4, (0, 0, 255), -1)
 
-            # # Misura del tempo ciclo
-            # tNow = time.time()
-            # if n == 1:
-            #     print(f"\rTempo ciclo thread {n}: {tNow - t0:.3f} s", end="")
-            # else:
-            #     print(f" - Tempo ciclo thread {n}: {tNow - t0:.3f} s", end="")
-
-            #print( f"color_img: {color_img}")
             with self.mutex:
                 self.frame = color_img
+
+    def acquire_frame(self, align):
+        depth = None
+        color = None
+        while depth is None and color is None:
+            fs = self.pipe.wait_for_frames()
+            fs = align.process(fs)
+            depth = fs.get_depth_frame()
+            color = fs.get_color_frame()
+
+        depth = np.asanyarray(depth.get_data()) 
+        color = np.asanyarray(color.get_data()) 
+        return depth, color
+    
+    def get_intrinsics(self):
+        color_stream = self.pipe.get_active_profile().get_stream(rs.stream.color)
+        intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
+
+        mtx = np.array([
+            [intrinsics.fx, 0,             intrinsics.ppx],
+            [0,              intrinsics.fy, intrinsics.ppy],
+            [0,              0,             1]
+        ], dtype=np.float64)
+        dist = np.array(intrinsics.coeffs, dtype=np.float64) 
+        return mtx, dist
+
 
     def read_frame(self):
         with self.mutex:

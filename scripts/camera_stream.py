@@ -115,7 +115,7 @@ def main():
         shms = []
         for i, device in enumerate(devices):
             # Create tracker block
-            tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), align, model, smoother, i+1).start()
+            tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model, smoother)
             trackers.append(tracker)
 
             frame = None
