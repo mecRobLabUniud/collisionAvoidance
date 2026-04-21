@@ -21,58 +21,16 @@ plt.show()"""
 import numpy as np
 import cv2
 import cv2.aruco as aruco
-import glob
+import os
 import argparse
 from utils.skeleton_tracker import SkeletonTracker
 import pyrealsense2 as rs
 
-
-
-# ctx = rs.context()
-# devices = ctx.devices  # Query connected devices
-# tracker = SkeletonTracker(devices[0].get_info(rs.camera_info.serial_number))
-# 
-# print(cap)
-# print(tracker)
-
-# termination criteria
+# parameters
+marker_ID = 42
+dim = 0.05
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-
-firstMarkerID = None
-
-
-def calibrate():
-    # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(8,6,0)
-    objp = np.zeros((6*9,3), np.float32)
-    objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
-
-    # Arrays to store object points and image points from all the images.
-    objpoints = []  # 3d point in real world space
-    imgpoints = []  # 2d points in image plane.
-
-    images = glob.glob('calib_images/*.png')
-
-    for fname in images:
-        img = cv2.imread(fname)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Find the chess board corners
-        ret, corners = cv2.findChessboardCorners(gray, (9, 6), None)
-
-        # If found, add object points, image points (after refining them)
-        if ret:
-            objpoints.append(objp)
-
-            corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-            imgpoints.append(corners2)
-
-            # Draw and display the corners
-            img = cv2.drawChessboardCorners(img, (9, 6), corners2, ret)
-
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
-
-    return [ret, mtx, dist, rvecs, tvecs]
 
 
 def saveCoefficients(mtx, dist):
@@ -81,6 +39,7 @@ def saveCoefficients(mtx, dist):
     cv_file.write("dist_coeff", dist)
     # note you *release* you don't close() a FileStorage object
     cv_file.release()
+
 
 
 def loadCoefficients():
@@ -100,41 +59,43 @@ def loadCoefficients():
     return [camera_matrix, dist_matrix]
 
 
-def inversePerspective(rvec, tvec):
-    R, _ = cv2.Rodrigues(rvec)
+
+def inversePerspective(rot, pos):
+    R, _ = cv2.Rodrigues(rot)
     R = np.matrix(R).T
-    invTvec = np.dot(-R, np.matrix(tvec))
-    invRvec, _ = cv2.Rodrigues(R)
-    return invRvec, invTvec
+    invpos = np.dot(-R, np.matrix(pos))
+    invrot, _ = cv2.Rodrigues(R)
+    return invrot, invpos
 
 
-def relativePosition(rvec1, tvec1):
-    rvec1, tvec1 = rvec1.reshape((3, 1)), tvec1.reshape(
+
+def relativePosition(rot1, pos1):
+    rot1, pos1 = rot1.reshape((3, 1)), pos1.reshape(
         (3, 1))
-    # rvec2, tvec2 = rvec2.reshape((3, 1)), tvec2.reshape((3, 1))
+    # rot2, pos2 = rot2.reshape((3, 1)), pos2.reshape((3, 1))
 
     # Inverse the second marker, the right one in the image
-    invRvec, invTvec = inversePerspective(rvec2, tvec2)
+    invrot, invpos = inversePerspective(rot2, pos2)
 
-    orgRvec, orgTvec = inversePerspective(invRvec, invTvec)
-    # print("rvec: ", rvec2, "tvec: ", tvec2, "\n and \n", orgRvec, orgTvec)
+    orgrot, orgpos = inversePerspective(invrot, invpos)
+    # print("rot: ", rot2, "pos: ", pos2, "\n and \n", orgrot, orgpos)
 
-    info = cv2.composeRT(rvec1, tvec1, invRvec, invTvec)
-    composedRvec, composedTvec = info[0], info[1]
+    info = cv2.composeRT(rot1, pos1, invrot, invpos)
+    composedrot, composedpos = info[0], info[1]
 
-    composedRvec = composedRvec.reshape((3, 1))
-    composedTvec = composedTvec.reshape((3, 1))
-    return composedRvec, composedTvec
+    composedrot = composedrot.reshape((3, 1))
+    composedpos = composedpos.reshape((3, 1))
+    return composedrot, composedpos
 
 
 
-def track(matrix_coefficients, distortion_coefficients):
+def recognition(tracker, align, matrix_coefficients, distortion_coefficients):
     pointCircle = (0, 0)
-    markerTvecList = []
-    markerRvecList = []
-    composedRvec, composedTvec = None, None
+    markerposList = []
+    markerrotList = []
+    composedrot, composedpos = None, None
     while True:
-        _, frame = tracker.acquire_frame(align)
+        frame = tracker.get_color_frame()
         
         # operations on the frame come here
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Change grayscale
@@ -146,44 +107,34 @@ def track(matrix_coefficients, distortion_coefficients):
         corners, ids, rejected_img_points = detector.detectMarkers(gray)
 
         if np.all(ids is not None):  # If there are markers found by detector
-            del markerTvecList[:]
-            del markerRvecList[:]
+            del markerposList[:]
+            del markerrotList[:]
             zipped = zip(ids, corners)
             ids, corners = zip(*(sorted(zipped)))
             axis = np.float32([[-0.01, -0.01, 0], [-0.01, 0.01, 0], [0.01, -0.01, 0], [0.01, 0.01, 0]]).reshape(-1, 3)
             for i in range(0, len(ids)):  # Iterate in markers
-                # Estimate pose of each marker and return the values rvec and tvec---different from camera coefficients
-                rvec, tvec, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02, matrix_coefficients,
+                # Estimate pose of each marker and return the values rot and pos---different from camera coefficients
+                rot, pos, markerPoints = aruco.estimatePoseSingleMarkers(corners[i], 0.02, matrix_coefficients,
                                                                            distortion_coefficients)
-
-                if ids[i] == firstMarkerID:
-                    firstRvec = rvec
-                    firstTvec = tvec
+                if ids[i] == marker_ID:
+                    rot = rot
+                    pos = pos
                     isFirstMarkerCalibrated = True
                     firstMarkerCorners = corners[i]
 
                 # print(markerPoints)
-                (rvec - tvec).any()  # get rid of that nasty numpy value array error
-                markerRvecList.append(rvec)
-                markerTvecList.append(tvec)
-
-                print(tvec)
+                (rot - pos).any()  # get rid of that nasty numpy value array error
+                markerrotList.append(rot)
+                markerposList.append(pos)
 
                 aruco.drawDetectedMarkers(frame, corners)  # Draw A square around the markers
 
-
-
-
-
-
-            imgpts, jac = cv2.projectPoints(axis, firstRvec, firstTvec, matrix_coefficients,
+            imgpts, jac = cv2.projectPoints(axis, rot, pos, matrix_coefficients,
                                             distortion_coefficients)
 
-            cv2.drawFrameAxes(frame, matrix_coefficients, distortion_coefficients, firstRvec, firstTvec, length=0.1)
+            cv2.drawFrameAxes(frame, matrix_coefficients, distortion_coefficients, rot, pos, length=0.1)
             relativePoint = (int(imgpts[0][0][0]), int(imgpts[0][0][1]))
             cv2.circle(frame, relativePoint, 2, (255, 255, 0))
-
-
 
         # Display the resulting frame
         cv2.imshow('frame', frame)
@@ -193,27 +144,118 @@ def track(matrix_coefficients, distortion_coefficients):
             break
         elif key == ord('c'):  # Calibration
             if len(ids) > 1:  # If there are two markers, reverse the second and get the difference
-                firstRvec, firstTvec = firstRvec.reshape((3, 1)), firstTvec.reshape((3, 1))
-                secondRvec, secondTvec = secondRvec.reshape((3, 1)), secondTvec.reshape((3, 1))
+                rot, pos = rot.reshape((3, 1)), pos.reshape((3, 1))
+                secondrot, secondpos = secondrot.reshape((3, 1)), secondpos.reshape((3, 1))
 
-                composedRvec, composedTvec = relativePosition(firstRvec, firstTvec, secondRvec, secondTvec)
+                composedrot, composedpos = relativePosition(rot, pos, secondrot, secondpos)
 
-    # When everything done, release the capture
-    # cap.release()
+        # Convert Rodrigues rot to 3x3 rotation matrix
+        R_mat, _ = cv2.Rodrigues(rot)
+        
+        # Build 4x4 pose matrix [R | t; 0 0 0 1]
+        pose_matrix = np.eye(4, dtype=np.float32)
+        pose_matrix[:3, :3] = R_mat  # Rotation part
+        pose_matrix[:3, 3] = pos.flatten()  # Translation part
+
     cv2.destroyAllWindows()
 
+    return pose_matrix
 
-if __name__ == '__main__':
+
+
+def calibration(frame, matrix_coefficients, distortion_coefficients):   
+    # operations on the frame come here
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Change grayscale
+    dictionary = aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
+    parameters = aruco.DetectorParameters()  # new style
+    detector = aruco.ArucoDetector(dictionary, parameters)
+
+    # lists of ids and the corners beloning to each id
+    corners, ids, _ = detector.detectMarkers(gray)
+
+    pose_matrix = None
+    if np.all(ids is not None):
+        zipped = zip(ids, corners)
+        ids, corners = zip(*(sorted(zipped)))
+        axis = np.float32([[-0.01, -0.01, 0], [-0.01, 0.01, 0], [0.01, -0.01, 0], [0.01, 0.01, 0]]).reshape(-1, 3)
+        # Estimate pose of each marker
+        for i in range(len(ids)):
+            if ids[i] == marker_ID:
+                rot, pos, _ = aruco.estimatePoseSingleMarkers(corners[i], dim, matrix_coefficients, distortion_coefficients)
+
+                # Build 4x4 pose matrix [R | t; 0 0 0 1]
+                R_mat, _ = cv2.Rodrigues(rot)
+                pose_matrix = np.eye(4, dtype=np.float32)
+                pose_matrix[:3, :3] = R_mat  # Rotation part
+                pose_matrix[:3, 3] = pos.flatten()  # Translation part
+
+                pose_matrix = np.linalg.inv(pose_matrix)
+
+                aruco.drawDetectedMarkers(frame, corners)  # Draw A square around the markers
+                imgpts, jac = cv2.projectPoints(axis, rot, pos, matrix_coefficients,
+                                                distortion_coefficients)
+
+                cv2.drawFrameAxes(frame, matrix_coefficients, distortion_coefficients, rot, pos, length=0.1)
+                relativePoint = (int(imgpts[0][0][0]), int(imgpts[0][0][1]))
+                cv2.circle(frame, relativePoint, 2, (255, 255, 0))
+
+                # Display the resulting frame
+                cv2.imshow('frame', frame)
+                # Wait 3 milisecoonds for an interaction. Check the key and do the corresponding job.
+                key = cv2.waitKey(1000) & 0xFF
+                if key == ord('q'):  # Quit
+                    break
+                elif key == ord('c'):  # Calibration
+                    if len(ids) > 1:  # If there are two markers, reverse the second and get the difference
+                        rot, pos = rot.reshape((3, 1)), pos.reshape((3, 1))
+                        secondrot, secondpos = secondrot.reshape((3, 1)), secondpos.reshape((3, 1))
+
+                        composedrot, composedpos = relativePosition(rot, pos, secondrot, secondpos)
+
+    return pose_matrix
+
+
+
+def write_pose_matrix_to_file(file, mat):
+    with open(file, 'w') as file:
+        for i in range(4):
+            file.write('\t'.join(map(str, mat[i, :])) + '\n')
+
+
+
+def main():
     # Create pipeline and start config
     align = rs.align(rs.stream.color) # Allinea depth a color
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
-    tracker = SkeletonTracker(devices[0].get_info(rs.camera_info.serial_number))
+    for i, device in enumerate(devices):
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number))
 
-    (mtx, dist) = tracker.get_intrinsics()
+        (mtx, dist) = tracker.get_intrinsics()
+        serial = device.get_info(rs.camera_info.serial_number)
 
-    firstMarkerID = 42
+        # while True:
+        #     _, frame = tracker.get_color_frame(align)
+        #     recognition(mtx, dist)
+        
+        frame = tracker.get_color_frame()
+        pose_matrix = calibration(frame, mtx, dist)
+        rot_matrix = np.array([[1, 0, 0, 0],
+                                [0, 0, 1, 0],
+                                [0, -1, 0, 0],
+                                [0, 0, 0, 1]])
+        # pose_matrix = np.dot(rot_matrix, pose_matrix)
 
-    track(mtx, dist)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        save_file = os.path.join(script_dir, f"calibration/pose_{serial}.txt")
+        write_pose_matrix_to_file(save_file, pose_matrix)
+
+        # recognition(tracker, align, mtx, dist)
+
+
+
+if __name__ == '__main__':
+    main()
+    
 
     

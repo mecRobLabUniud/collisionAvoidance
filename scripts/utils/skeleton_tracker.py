@@ -18,6 +18,7 @@ import numpy as np
 import pyrealsense2 as rs
 import threading
 import logging
+from utils.filters import Keypoints3DSmoother
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -87,17 +88,20 @@ class SkeletonTracker:
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
+        self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
 
-    def start(self, align, model, smoother):
+
+    def start(self, align, model):
         self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.skeleton_tracking, args=(align, model, smoother))
+        self.thread = threading.Thread(target=self.skeleton_tracking, args=(align, model))
         if self.started:
             return
         self.started = True
         self.thread.start()
         return self
+    
 
-    def skeleton_tracking(self, align, model, smoother):
+    def skeleton_tracking(self, align, model):
         global running
         while running and self.started:
             t0 = time.time()
@@ -112,12 +116,10 @@ class SkeletonTracker:
             if not depth or not color:
                 continue
 
-            # Conversione immagine per YOLO
-            color_img = np.asanyarray(color.get_data()) # trasforma i dati grezzi della telecamera in un array NumPy
-            
             # Inferenza rete neurale
+            color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
-            
+
             # Se è stata rilevata almeno una persona
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
                 person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
@@ -149,7 +151,7 @@ class SkeletonTracker:
 
                 # Filtraggio temporale (OneEuroFilter)
                 with self.mutex:
-                    self.xyz = smoother.update(xyz_cam, conf, conf_thr)
+                    self.xyz = self.smoother.update(xyz_cam, conf, conf_thr)
                     self.conf = conf
                     
                 # --- VISUALIZZAZIONE REAL-TIME ---
@@ -166,7 +168,8 @@ class SkeletonTracker:
             with self.mutex:
                 self.frame = color_img
 
-    def acquire_frame(self, align):
+
+    def get_aligned_frames(self, align):
         depth = None
         color = None
         while depth is None and color is None:
@@ -179,6 +182,31 @@ class SkeletonTracker:
         color = np.asanyarray(color.get_data()) 
         return depth, color
     
+
+    def get_depth_frame(self):
+        depth = None
+        while depth is None:
+            fs = self.pipe.wait_for_frames()
+            depth = fs.get_depth_frame()
+
+        depth = np.asanyarray(depth.get_data()) 
+        return depth
+    
+
+    def get_color_frame(self):
+        color = None
+        while color is None:
+            fs = self.pipe.wait_for_frames()
+            color = fs.get_color_frame()
+
+        color = np.asanyarray(color.get_data()) 
+        return color
+    
+
+    def get_serial_number(self):
+        return self.device
+    
+
     def get_intrinsics(self):
         color_stream = self.pipe.get_active_profile().get_stream(rs.stream.color)
         intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
@@ -197,11 +225,13 @@ class SkeletonTracker:
             frame = self.frame.copy() if self.frame is not None else None
         return frame
     
+
     def read_coords(self):
         with self.mutex:
             xyz = self.xyz.copy() if self.xyz is not None else None
-            conf = self.conf.copy() if self.conf is not None else None
+            conf = self.conf.copy() if self.conf is not None else None            
         return xyz, conf
+
 
     def stop(self):
         self.started = False
