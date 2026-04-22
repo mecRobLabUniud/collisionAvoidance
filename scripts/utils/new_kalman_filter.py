@@ -122,11 +122,10 @@ class KalmanFilter:
         if not (no_new1 and no_new2):
             y_k   = z_k - self.H_k.dot(self.s_k)                      # innovation
             S     = self.H_k.dot(self.p_k).dot(self.H_k.T) + self.R   # innovation covariance
-            S_inv = np.linalg.inv(S)
-            KG_k  = self.p_k.dot(self.H_k.T).dot(S_inv)               # Kalman gain
+            K  = self.p_k.dot(self.H_k.T).dot(np.linalg.inv(S))               # Kalman gain
 
-            self.s_k = self.s_k + KG_k.dot(y_k)
-            self.p_k = (np.eye(self.n) - KG_k.dot(self.H_k)).dot(self.p_k)
+            self.s_k = self.s_k + K.dot(y_k)
+            self.p_k = (np.eye(self.n) - K.dot(self.H_k)).dot(self.p_k)
 
     def compute_bounds(self, alpha, dt):
         """
@@ -253,7 +252,7 @@ class KalmanFilter:
 
         self.predict()
         self.update(z_k, no_new1, no_new2)
-        self.s_k = self.compute_bounds(self.s_k, self.dt)
+        # self.s_k = self.compute_bounds(self.s_k, self.dt)
         return self.s_k
 
 

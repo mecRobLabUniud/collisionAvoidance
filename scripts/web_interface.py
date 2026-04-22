@@ -29,6 +29,7 @@ import webbrowser
 from statistics import mean
 from utils.kalman_filter import KalmanFilter 
 # from utils.new_kalman_filter import KalmanFilter 
+from utils.simple_kalman_filter import simple_kalman_filter as simple_kfil
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -139,27 +140,26 @@ def update_bar_chart(n_intervals):
     skeletons = [interface.read_skeleton() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
 
-    kf = KalmanFilter(process_noise=0.01,
-                        measurement_noise=5.0,
-                        initial_estimate=0.0,)
-
-    # kf = KalmanFilter()
+    kf = KalmanFilter()
+    
+    t0 = time.time()
 
     fused_skels = []
     for i in range(len(skeletons[0])):
         skel = []
+        conf = [0.9, 0.9]
         for skeleton in skeletons:
             skel.append(skeleton[i])
-        fused_skels.append(kf.merge(*skel))
-        # fused_skels.append(kf.step(*skel))
+        # fused_skels.append(kf.merge(*skel))
+        # res = simple_kfil(skel, conf)
+        res = kf.step(skel, conf)
+        fused_skels.append(res)
 
-    # x = [pnt[0] for pnt in fused_skels]
-    # y = [pnt[1] for pnt in fused_skels]
-    # z = [pnt[2] for pnt in fused_skels]
+    print("fusion time: ", time.time() - t0)
 
-    x = [pnt[0] for pnt in skeletons[0]]
-    y = [pnt[1] for pnt in skeletons[0]]
-    z = [pnt[2] for pnt in skeletons[0]]
+    x = [pnt[0] for pnt in fused_skels]
+    y = [pnt[1] for pnt in fused_skels]
+    z = [pnt[2] for pnt in fused_skels]
 
     mean_x = mean([x for x in x if not np.isnan(x)])
     mean_y = mean([y for y in y if not np.isnan(y)])
@@ -167,30 +167,30 @@ def update_bar_chart(n_intervals):
 
     
     mass_center = [mean_x, mean_y, mean_z]
-    scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-2, mass_center[0]+2],),
-                yaxis = dict(nticks=10, range=[mass_center[1]-2, mass_center[1]+2],),
-                zaxis = dict(nticks=10, range=[mass_center[2]-2, mass_center[2]+2],))
+    scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-1, mass_center[0]+1],),
+                yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
+                zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
 
-    fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='blue', size=5))])
+    fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))])
     for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='lines')
+        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+                          marker=dict(color='red', size=5), line=dict(color='red', width=2))
 
-
-
-
-    """x = [pnt[0] for pnt in skeletons[0]]
+    x = [pnt[0] for pnt in skeletons[0]]
     y = [pnt[1] for pnt in skeletons[0]]
     z = [pnt[2] for pnt in skeletons[0]]
-    fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))
+    # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))
     for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='lines')
+        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+                          marker=dict(color='blue', size=5), line=dict(color='blue', width=2))
 
     x = [pnt[0] for pnt in skeletons[1]]
     y = [pnt[1] for pnt in skeletons[1]]
     z = [pnt[2] for pnt in skeletons[1]]
-    fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='green', size=5))
+    # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='green', size=5))
     for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='lines')"""
+        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+                          marker=dict(color='green', size=5), line=dict(color='green', width=2))
 
 
 
@@ -223,7 +223,7 @@ def main():
                             html.Img(id="img_4", style={"height": "300px", "width": "530px", "margin": "20 20 20 20"})],
                         style={"display": "flex", "width": "100%"})],
                     style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=50, n_intervals=0)], 
+                    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)], 
                 id = "change-height", 
                 style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
     
