@@ -27,9 +27,8 @@ import multiprocessing.resource_tracker as rt
 import time
 import webbrowser
 from statistics import mean
-from utils.kalman_filter import KalmanFilter 
-# from utils.new_kalman_filter import KalmanFilter 
-from utils.simple_kalman_filter import simple_kalman_filter as simple_kfil
+from utils.kalman_filter import KalmanFilter
+from utils.speed_kalman_filter import KalmanFilter as SpeedKalmanFilter
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -39,7 +38,6 @@ COCO_SKELETON = [
     (11, 13), (13, 15), (12, 14), (14, 16)
 ]
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
-
 
 # Parameters
 endpoint = "tcp://localhost:6000"
@@ -51,11 +49,15 @@ camera = dict(up=dict(x=0, y=0, z=1),
 data = None
 pic = None
 interfaces = None
+skel_len = 17
 H, W, C = 480, 848, 3 
 dtype = np.uint8
 
 # Launching Dash app
 app = Dash(__name__)
+
+# Initializing kalman filter classes
+kfs = [SpeedKalmanFilter() for _ in range(skel_len)]
 
 
 
@@ -87,8 +89,9 @@ class SkeletonVisualizer:
 
         self.n_device = n
         self.started = False
-        self.skeleton_data = None
-        self.frame_data = None
+        self.skeleton = None
+        self.confidence = None
+        self.frame = None
 
     def start(self):
         self.mutex = threading.Lock()
@@ -102,10 +105,12 @@ class SkeletonVisualizer:
     def data_receiver(self, n: int):
         global running
         while running:
-            _, _, message = self.socket.recv_string().split(" ", 2)
-            skeleton = json.loads(message)
+            _, _, msg1, msg2 = self.socket.recv_string().split("; ", 3)
+            skeleton = json.loads(msg1)
+            confidence = json.loads(msg2)
             with self.mutex:
-                self.skeleton_data = skeleton
+                self.skeleton = skeleton
+                self.confidence = confidence
 
             shm = shared_memory.SharedMemory(name=f"shared_image_{n}")
             remove_shm_from_resource_tracker(shm.name) 
@@ -114,16 +119,21 @@ class SkeletonVisualizer:
             frame = cv2_to_b64(img)
             shm.close() 
             with self.mutex:
-                self.frame_data = frame
+                self.frame = frame
 
     def read_skeleton(self):
         with self.mutex:
-            skeleton = self.skeleton_data.copy() if self.skeleton_data is not None else None
+            skeleton = self.skeleton.copy() if self.skeleton is not None else None
         return skeleton
+    
+    def read_confidence(self):
+        with self.mutex:
+            confidence = self.confidence.copy() if self.confidence is not None else None
+        return confidence
     
     def read_frame(self):
         with self.mutex:
-            frame = self.frame_data if self.frame_data is not None else None
+            frame = self.frame if self.frame is not None else None
         return frame
     
     def stop(self):
@@ -138,33 +148,21 @@ class SkeletonVisualizer:
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     skeletons = [interface.read_skeleton() for interface in interfaces]
+    confidences = [interface.read_confidence() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
 
-    kf = KalmanFilter()
-    
-    t0 = time.time()
-
     fused_skels = []
-    for i in range(len(skeletons[0])):
-        skel = []
-        conf = [0.9, 0.9]
-        for skeleton in skeletons:
-            skel.append(skeleton[i])
-        # fused_skels.append(kf.merge(*skel))
-        # res = simple_kfil(skel, conf)
-        res = kf.step(skel, conf)
-        fused_skels.append(res)
-
-    print("fusion time: ", time.time() - t0)
+    for i in range(skel_len):
+        skel = [skeleton[i] for skeleton in skeletons]
+        conf = [confidence[i] for confidence in confidences]
+        fused_skels.append(kfs[i].step(skel, conf))
 
     x = [pnt[0] for pnt in fused_skels]
     y = [pnt[1] for pnt in fused_skels]
     z = [pnt[2] for pnt in fused_skels]
-
     mean_x = mean([x for x in x if not np.isnan(x)])
     mean_y = mean([y for y in y if not np.isnan(y)])
     mean_z = mean([z for z in z if not np.isnan(z)])
-
     
     mass_center = [mean_x, mean_y, mean_z]
     scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-1, mass_center[0]+1],),
@@ -174,15 +172,15 @@ def update_bar_chart(n_intervals):
     fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))])
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='red', size=5), line=dict(color='red', width=2))
+                          marker=dict(color='blue', size=5), line=dict(color='blue', width=3))
 
-    x = [pnt[0] for pnt in skeletons[0]]
+    """x = [pnt[0] for pnt in skeletons[0]]
     y = [pnt[1] for pnt in skeletons[0]]
     z = [pnt[2] for pnt in skeletons[0]]
     # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='blue', size=5), line=dict(color='blue', width=2))
+                          marker=dict(color='red', size=5), line=dict(color='red', width=2))
 
     x = [pnt[0] for pnt in skeletons[1]]
     y = [pnt[1] for pnt in skeletons[1]]
@@ -190,10 +188,7 @@ def update_bar_chart(n_intervals):
     # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='green', size=5))
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='green', size=5), line=dict(color='green', width=2))
-
-
-
+                          marker=dict(color='green', size=5), line=dict(color='green', width=2))"""
 
 
     fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
@@ -217,21 +212,25 @@ def main():
                     html.Div([
                         dcc.Graph(id="graph"),
                         html.Div([
-                            html.Img(id="img_1", style={"height": "300px", "width": "530px", "margin": "20 20 20 20"}),
-                            html.Img(id="img_2", style={"height": "300px", "width": "530px", "margin": "20 20 20 20"}),
-                            html.Img(id="img_3", style={"height": "300px", "width": "530px", "margin": "20 20 20 20"}),
-                            html.Img(id="img_4", style={"height": "300px", "width": "530px", "margin": "20 20 20 20"})],
-                        style={"display": "flex", "width": "100%"})],
+                            html.Div([
+                                html.Img(id="img_1", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"}),
+                                html.Img(id="img_2", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"})],
+                            style={"display": "flex", "width": "100%"}),
+                            html.Div([
+                                html.Img(id="img_3", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"}),
+                                html.Img(id="img_4", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"})],
+                            style={"display": "flex", "width": "100%"})],
+                        style={"display": "inline-block", "width": "100%"})],
                     style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)], 
+                    dcc.Interval(id='interval-component', interval=50, n_intervals=0)], 
                 id = "change-height", 
-                style={'display': 'inline-block', 'width': '100%', 'height': '100%'})
+                style={"display": "inline-block", "width": "100%", "height": "100%"})
     
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
     socket.connect(endpoint)
-    s, n_devices, _ = socket.recv_string().split(" ", 2)
+    _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
     interfaces = [SkeletonVisualizer(n).start() for n in range(int(n_devices))]

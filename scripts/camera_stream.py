@@ -121,7 +121,7 @@ def tracking(align, model, socket, video_writer):
                     conf = conf.astype(np.float32)
 
                     payload = (xyz_base, conf)
-                    message = f"{topic}_{n} {len(devices)} {json.dumps(payload[0].tolist())}"  # Still have to add conf
+                    message = f"{topic}_{n}; {len(devices)}; {json.dumps(payload[0].tolist())}; {json.dumps(payload[1].tolist())}"  # Still have to add conf
                     socket.send_string(message)
 
                 if not frame is None:

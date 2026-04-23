@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
 from utils.kalman_filter import KalmanFilter as kfil
-from utils.new_kalman_filter import KalmanFilter as new_kfil
-from utils.simple_kalman_filter import simple_kalman_filter as simple_kfil
+from utils.speed_kalman_filter import KalmanFilter as skfil
 import numpy as np
 
 
@@ -15,18 +14,23 @@ arr5 = [[np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]]
 # skeletons = [arr1, arr2, arr3, arr4, arr5]
 skeletons = [arr2, arr4]
 
-kf = kfil()
+kfs = []
+skfs = []
+for i in range(len(skeletons)):
+    kfs.append(kfil())
+    skfs.append(skfil())
 
 for i in range(10):
-    for array in skeletons:
+    for n, array in enumerate(skeletons):
         print(f"\n stage {i} ======================")
         print(array)
-
+        
         conf = [0.9, 0.9]
 
-        res = simple_kfil(array, conf)
-        print("result simple_kfil: ", res)
         
-        res = kf.step(array, conf)
+        res = kfs[n].step(array, conf)
         print("result kfil class: ", res)
+
+        res = skfs[n].step(array, conf)
+        print("result SPEED kfil class: ", res)
         
