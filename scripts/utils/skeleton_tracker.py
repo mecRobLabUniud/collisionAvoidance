@@ -33,8 +33,8 @@ COCO_SKELETON = [
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 
 # Parameters
-w_camera, h_camera = 848, 480
-camera_rate = 60
+
+
 conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1.0)
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
@@ -42,11 +42,12 @@ running = True
 
 
 # Function for RealSense pipeline initialization 
-def camera_streaming(serial):
+def camera_streaming(serial, w_camera, h_camera, camera_rate, depth):
     pipe = rs.pipeline()
     cfg = rs.config()
     cfg.enable_device(serial)
-    cfg.enable_stream(rs.stream.depth, w_camera, h_camera, rs.format.z16, camera_rate)
+    if depth:
+        cfg.enable_stream(rs.stream.depth, w_camera, h_camera, rs.format.z16, camera_rate)
     cfg.enable_stream(rs.stream.color, w_camera, h_camera, rs.format.bgr8, camera_rate)
     pipe.start(cfg)
     return pipe
@@ -80,9 +81,9 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
 
 # Class for tracking skeletons from RealSense camera, applying YOLOv8-Pose for keypoint detection, and using Keypoints3DSmoother for temporal smoothing and occlusion handling
 class SkeletonTracker:
-    def __init__(self, device):
+    def __init__(self, device, w_camera=848, h_camera=480, camera_rate=60, depth=True):
         self.device = device
-        self.pipe = camera_streaming(self.device)
+        self.pipe = camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
         self.frame = None
         self.started = False
         self.xyz = None

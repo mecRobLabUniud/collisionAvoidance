@@ -120,6 +120,9 @@ def tracking(align, model, socket, video_writer):
                     xyz_base = transform_points(pose_matrix, xyz.astype(np.float64)).astype(np.float32)
                     conf = conf.astype(np.float32)
 
+                    # if n == 1:
+                    #     xyz_base = np.full((17, 3), np.nan, dtype=np.float32)          
+
                     payload = (xyz_base, conf)
                     message = f"{topic}_{n}; {len(devices)}; {json.dumps(payload[0].tolist())}; {json.dumps(payload[1].tolist())}"  # Still have to add conf
                     socket.send_string(message)

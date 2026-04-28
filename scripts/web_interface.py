@@ -105,7 +105,7 @@ class SkeletonVisualizer:
     def data_receiver(self, n: int):
         global running
         while running:
-            _, _, msg1, msg2 = self.socket.recv_string().split("; ", 3)
+            x, _, msg1, msg2 = self.socket.recv_string().split("; ", 3)
             skeleton = json.loads(msg1)
             confidence = json.loads(msg2)
             with self.mutex:
@@ -151,15 +151,21 @@ def update_bar_chart(n_intervals):
     confidences = [interface.read_confidence() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
 
+    fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
+
     fused_skels = []
     for i in range(skel_len):
-        skel = [skeleton[i] for skeleton in skeletons]
+        skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
         conf = [confidence[i] for confidence in confidences]
         fused_skels.append(kfs[i].step(skel, conf))
 
     x = [pnt[0] for pnt in fused_skels]
     y = [pnt[1] for pnt in fused_skels]
     z = [pnt[2] for pnt in fused_skels]
+    for (a, b) in EDGES:
+        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+                          marker=dict(color='blue', size=5), line=dict(color='blue', width=3))
+        
     mean_x = mean([x for x in x if not np.isnan(x)])
     mean_y = mean([y for y in y if not np.isnan(y)])
     mean_z = mean([z for z in z if not np.isnan(z)])
@@ -169,26 +175,25 @@ def update_bar_chart(n_intervals):
                 yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
                 zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
 
-    fig = go.Figure(data=[go.Scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))])
-    for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='blue', size=5), line=dict(color='blue', width=3))
-
-    """x = [pnt[0] for pnt in skeletons[0]]
+    x = [pnt[0] for pnt in skeletons[0]]
     y = [pnt[1] for pnt in skeletons[0]]
     z = [pnt[2] for pnt in skeletons[0]]
-    # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='red', size=5))
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='red', size=5), line=dict(color='red', width=2))
 
-    x = [pnt[0] for pnt in skeletons[1]]
-    y = [pnt[1] for pnt in skeletons[1]]
-    z = [pnt[2] for pnt in skeletons[1]]
-    # fig.add_scatter3d(x=x, y=y, z=z, mode='markers', marker=dict(color='green', size=5))
-    for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='green', size=5), line=dict(color='green', width=2))"""
+    # x = [pnt[0] for pnt in skeletons[1]]
+    # y = [pnt[1] for pnt in skeletons[1]]
+    # z = [pnt[2] for pnt in skeletons[1]]
+    # for (a, b) in EDGES:
+    #     fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+    #                       marker=dict(color='green', size=5), line=dict(color='green', width=2))
+        
+    fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 1], mode='markers+lines', 
+                          marker=dict(color='black', size=5), line=dict(color='black', width=2))
+        
+    
+
 
 
     fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
@@ -222,7 +227,7 @@ def main():
                             style={"display": "flex", "width": "100%"})],
                         style={"display": "inline-block", "width": "100%"})],
                     style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=50, n_intervals=0)], 
+                    dcc.Interval(id='interval-component', interval=100, n_intervals=0)], 
                 id = "change-height", 
                 style={"display": "inline-block", "width": "100%", "height": "100%"})
     
