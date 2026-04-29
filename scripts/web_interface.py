@@ -182,12 +182,12 @@ def update_bar_chart(n_intervals):
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='red', size=5), line=dict(color='red', width=2))
 
-    # x = [pnt[0] for pnt in skeletons[1]]
-    # y = [pnt[1] for pnt in skeletons[1]]
-    # z = [pnt[2] for pnt in skeletons[1]]
-    # for (a, b) in EDGES:
-    #     fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-    #                       marker=dict(color='green', size=5), line=dict(color='green', width=2))
+    x = [pnt[0] for pnt in skeletons[1]]
+    y = [pnt[1] for pnt in skeletons[1]]
+    z = [pnt[2] for pnt in skeletons[1]]
+    for (a, b) in EDGES:
+        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
+                          marker=dict(color='green', size=5), line=dict(color='green', width=2))
         
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 1], mode='markers+lines', 
                           marker=dict(color='black', size=5), line=dict(color='black', width=2))

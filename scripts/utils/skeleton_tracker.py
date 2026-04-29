@@ -211,7 +211,6 @@ class SkeletonTracker:
     def get_intrinsics(self):
         color_stream = self.pipe.get_active_profile().get_stream(rs.stream.color)
         intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
-
         mtx = np.array([
             [intrinsics.fx, 0,             intrinsics.ppx],
             [0,              intrinsics.fy, intrinsics.ppy],
