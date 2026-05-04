@@ -10,7 +10,6 @@ using a 1-D Kalman filter with multi-sensor sequential updates.
 """
 
 import numpy as np
-from math import pi
 
 
 class KalmanFilter:
@@ -61,7 +60,7 @@ class KalmanFilter:
         for z_k, conf in zip(measurement, confidence):
             if np.isnan(z_k).any():
                 continue
-            self.R = (1-conf)**2 * np.eye(3)
+            self.R = (1.1-conf)**2 * np.eye(3)    # modified 1 to 1.1
             res = self.update(z_k)
             if res:
                 continue

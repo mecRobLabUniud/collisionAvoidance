@@ -16,25 +16,15 @@ import signal
 import os
 import cv2
 import numpy as np
-import struct
 import zmq
-import pyrealsense2 as rs
-from ultralytics import YOLO
-from utils.skeleton_tracker import SkeletonTracker
-from utils.filters import Keypoints3DSmoother
 import time
 import json
-from multiprocessing import shared_memory
-from PIL import Image
-import numpy as np
-import time
-import cv2
 import pyrealsense2 as rs
 from ultralytics import YOLO
+from multiprocessing import shared_memory
 from utils.skeleton_tracker import SkeletonTracker
-import os
-import signal 
-
+from utils.skeleton_tracker import SkeletonTracker
+ 
 MAGIC = b"SKEL" 
 VERSION = 1
 HDR_FMT = "<4sHHQ"     # magic, version, n_caps, t_mono_ns )
@@ -56,13 +46,11 @@ video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
 yolo_model = "yolo26n-pose" # "yolov8x-pose.pt"
 
 
-
 # Function to load the rigid transformation matrix from a text file
 def load_pose_matrix(path_txt):
     T = np.loadtxt(path_txt, dtype=np.float64)
     assert T.shape == (4, 4)
     return T
-
 
 
 # Function to apply a rigid transformation T (4x4) to a set of 3D points pts_xyz (N,3)
@@ -73,10 +61,10 @@ def transform_points(T, pts_xyz):
     return (T @ pts_h.T).T[:, :3] # ritorna solo le prime 3 colonne (X,Y,Z) di tutte le righe
 
 
-
+# Function to enable tracking thread for each device and share data with connected applications
 def tracking(align, model, socket, video_writer):
     try:
-        # Devices initialization: supporta più telecamere RealSense collegate, ognuna con la propria pipeline e allineamento
+        # Devices initialization
         ctx = rs.context()
         devices = ctx.devices  # Query connected devices
         trackers = []
@@ -133,7 +121,7 @@ def tracking(align, model, socket, video_writer):
 
                         if cv2.waitKey(1) & 0xFF == ord('q'):
                             break
-                    # Salvataggio video
+                    # Video saving
                     if n == 0:
                         if save_video and video_writer is not None:
                             video_writer.write(frame)
@@ -146,14 +134,13 @@ def tracking(align, model, socket, video_writer):
         for tracker in trackers:
             tracker.stop()
 
-        # Cleanup risorse (fondamentale per non bloccare la RealSense al riavvio)
+        # Resources cleanup
         print("Chiusura pipeline e finestre...")
         cv2.destroyAllWindows()
         if video_writer is not None:
             video_writer.release()
         socket.close()
         # ctx.term()
-
 
 
 # Main loop to read from camera, process skeleton and send data via ZeroMQ
@@ -182,7 +169,6 @@ def main():
     tracking(align, model, socket, video_writer)
     
 
-
+# Entry point
 if __name__ == "__main__":
-    time.sleep(2)
     main()

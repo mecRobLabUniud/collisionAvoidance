@@ -24,25 +24,21 @@
 16: Right Ankle 
 """
 
-from dash import Dash, dcc, html, Input, Output
+
 import plotly.express as px
-import numpy as np
 import plotly.graph_objs as go
 import cv2
 import zmq
 import json
-import signal
 import threading
 import time
 import base64
-from multiprocessing import shared_memory
-from PIL import Image
 import numpy as np
-import cv2
 import multiprocessing.resource_tracker as rt
-import time
 import webbrowser
+from dash import Dash, dcc, html, Input, Output
 from statistics import mean
+from multiprocessing import shared_memory
 from utils.kalman_filter import KalmanFilter  as NormalKalmanFilter
 from utils.speed_kalman_filter import KalmanFilter as SpeedKalmanFilter
 
@@ -80,11 +76,9 @@ kfs = [SpeedKalmanFilter() for _ in range(skel_len)]
 # kfs = [NormalKalmanFilter() for _ in range(skel_len)]
 
 
-
 # Unregister shared_memory folder
 def remove_shm_from_resource_tracker(name):
     rt.unregister(f"/{name}", "shared_memory")
-
 
 
 # Convert OpenCV image to base64 data URI
@@ -94,7 +88,6 @@ def cv2_to_b64(img):
         return None
     encoded = base64.b64encode(buffer).decode("utf-8")
     return "data:image/jpeg;base64," + encoded
-
 
 
 # Starting thread for data acquisition from camera_stream
@@ -163,7 +156,6 @@ class SkeletonVisualizer:
         return self
 
 
-
 @app.callback([Output("graph", "figure"), Output("img_1", "src"), Output("img_2", "src"), Output("img_3", "src"), Output("img_4", "src")], Input('interval-component', 'n_intervals'))
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
@@ -198,7 +190,7 @@ def update_bar_chart(n_intervals):
                 yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
                 zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
 
-    x = [pnt[0] for pnt in skeletons[0]]
+    """x = [pnt[0] for pnt in skeletons[0]]
     y = [pnt[1] for pnt in skeletons[0]]
     z = [pnt[2] for pnt in skeletons[0]]
     for (a, b) in EDGES:
@@ -210,7 +202,7 @@ def update_bar_chart(n_intervals):
     z = [pnt[2] for pnt in skeletons[1]]
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)
+                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)"""
         
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 1], mode='markers+lines', 
                           marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt))
@@ -235,7 +227,6 @@ def update_bar_chart(n_intervals):
             ret.append(None)
 
     return ret
-
 
 
 # Main loop to receive data via ZeroMQ and shared_memory and update the plot
@@ -275,7 +266,7 @@ def main():
         interface.stop()
         
 
-
+# Entry point
 if __name__ == "__main__":
     main()
     
