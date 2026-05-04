@@ -75,7 +75,7 @@ class KalmanFilter:
                 continue
             if np.isnan(z_k).any():
                 continue
-            self.R = (1-conf)**2 * np.eye(int(self.n/2))
+            self.R = (1.1-conf)**2 * np.eye(int(self.n/2))  # modified 1 to 1.1
             res = self.update(z_k)
             if res:
                 continue
