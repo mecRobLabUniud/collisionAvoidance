@@ -11,7 +11,7 @@ import cv2
 import os
 from utils.skeleton_tracker import SkeletonTracker
 import pyrealsense2 as rs
-from utils.marker_detector  import MarkerDetector
+from utils.marker_detector  import * # MarkerDetector
 
 # Parameters
 

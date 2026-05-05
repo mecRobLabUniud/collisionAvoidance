@@ -39,8 +39,7 @@ import webbrowser
 from dash import Dash, dcc, html, Input, Output
 from statistics import mean
 from multiprocessing import shared_memory
-from utils.kalman_filter import KalmanFilter  as NormalKalmanFilter
-from utils.speed_kalman_filter import KalmanFilter as SpeedKalmanFilter
+from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -72,7 +71,7 @@ t0 = time.time()
 app = Dash(__name__)
 
 # Initializing kalman filter classes
-kfs = [SpeedKalmanFilter() for _ in range(skel_len)]
+kfs = [ImprovedKalmanFilter6D() for _ in range(skel_len)]
 # kfs = [NormalKalmanFilter() for _ in range(skel_len)]
 
 
@@ -165,13 +164,13 @@ def update_bar_chart(n_intervals):
 
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
-    print("\n================================\n")
+    # print("\n================================\n")
 
     fused_skels = []
     for i in range(skel_len):
         skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
         conf = [confidence[i] for confidence in confidences]
-        print(f"Keypoint {i}: {[c for c in conf]}")
+        # print(f"Keypoint {i}: {[c for c in conf]}")
         fused_skels.append(kfs[i].step(skel, conf))
 
     x = [pnt[0] for pnt in fused_skels]
@@ -179,8 +178,9 @@ def update_bar_chart(n_intervals):
     z = [pnt[2] for pnt in fused_skels]
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
+                          marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt), opacity=0.8)
         
+    # print(x, y, z)
     mean_x = mean([x for x in x if not np.isnan(x)])
     mean_y = mean([y for y in y if not np.isnan(y)])
     mean_z = mean([z for z in z if not np.isnan(z)])
@@ -195,7 +195,7 @@ def update_bar_chart(n_intervals):
     z = [pnt[2] for pnt in skeletons[0]]
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='red', size=marker_sz), line=dict(color='red', width=line_wdt), opacity=0.5)
+                          marker=dict(color='grey', size=marker_sz), line=dict(color='grey', width=line_wdt), opacity=0.5)
 
     x = [pnt[0] for pnt in skeletons[1]]
     y = [pnt[1] for pnt in skeletons[1]]
@@ -204,19 +204,18 @@ def update_bar_chart(n_intervals):
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)"""
         
-    fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 1], mode='markers+lines', 
-                          marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt))
+    fig.add_scatter3d(x=[0, 0.1], y=[0, 0], z=[0, 0], mode='markers+lines', 
+                          marker=dict(color='red', size=marker_sz), line=dict(color='red', width=line_wdt), opacity=0.8)
+    fig.add_scatter3d(x=[0, 0], y=[0, 0.1], z=[0, 0], mode='markers+lines', 
+                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.8)
+    fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
+                          marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
     
-
-    if time.time() - t0 >= 10:
-        global running
-        running = False
-        quit()
+    # if time.time() - t0 >= 10:
+    #     global running
+    #     running = False
+    #     quit()
         
-    
-
-
-
     fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
     ret = [fig]
@@ -247,7 +246,7 @@ def main():
                             style={"display": "flex", "width": "100%"})],
                         style={"display": "inline-block", "width": "100%"})],
                     style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)], 
+                    dcc.Interval(id='interval-component', interval=100, n_intervals=0)], 
                 id = "change-height", 
                 style={"display": "inline-block", "width": "100%", "height": "100%"})
     

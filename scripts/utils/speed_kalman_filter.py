@@ -6,14 +6,15 @@
 ░▀░▀░▀░▀░▀▀▀░▀░▀░▀░▀░▀░▀░░░▀░░░▀▀▀░▀▀▀░░▀░░▀▀▀░▀░▀
 
 Merges two or more noisy arrays into a single optimal estimate
-using a 1-D Kalman filter with multi-sensor sequential updates.
+using a 6-D Kalman filter with multi-sensor sequential updates,
+taking into account velocity for better predictions.
 """
 
 import numpy as np
 from math import pi
 
 
-class KalmanFilter:
+class KalmanFilter6D:
     def __init__(self):
         self.conf_thresh = 0.5
         self.maha_thresh = 9.0
