@@ -23,7 +23,6 @@ import pyrealsense2 as rs
 from ultralytics import YOLO
 from multiprocessing import shared_memory
 from utils.skeleton_tracker import SkeletonTracker
-from utils.skeleton_tracker import SkeletonTracker
  
 MAGIC = b"SKEL" 
 VERSION = 1
@@ -63,84 +62,91 @@ def transform_points(T, pts_xyz):
 
 # Function to enable tracking thread for each device and share data with connected applications
 def tracking(align, model, socket, video_writer):
-    try:
-        # Devices initialization
-        ctx = rs.context()
-        devices = ctx.devices  # Query connected devices
-        trackers = []
-        shms = []
-        pose_matrixes = []
-        for i, device in enumerate(devices):
-            # Create tracker block
-            tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
-            trackers.append(tracker)
+    
+    # Devices initialization
+    ctx = rs.context()
+    devices = ctx.devices  # Query connected devices
+    trackers = []
+    shms = []
+    pose_matrixes = []
+    for i, device in enumerate(devices):
+        # Create tracker block
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
+        trackers.append(tracker)
 
-            frame = None
-            while frame is None:
-                frame = tracker.read_frame()
-            shape = frame.shape
-            dtype = frame.dtype
+        frame = None
+        while frame is None:
+            frame = tracker.read_frame()
+        shape = frame.shape
+        dtype = frame.dtype
 
+        try:
             # Create shared memory block
             shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name=f"shared_image_{i}")
-            shms.append(shm)
+        except FileExistsError:
+            # If the shared memory block already exists, unlink it and create a new one
+            existing_shm = shared_memory.SharedMemory(name=f"shared_image_{i}")
+            existing_shm.close()
+            existing_shm.unlink()
+            shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name=f"shared_image_{i}")
+        shms.append(shm)
 
-            serial = tracker.get_serial_number()
-            pose_matrix = load_pose_matrix(os.path.join(script_dir, f"calibration/pose_{serial}.txt"))
-            pose_matrixes.append(pose_matrix)
+        serial = tracker.get_serial_number()
+        pose_matrix = load_pose_matrix(os.path.join(script_dir, f"calibration/pose_{serial}.txt"))
+        pose_matrixes.append(pose_matrix)
 
-            print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
-        print("Streaming enabled")
-        
-        # Data acquisition main loop
-        while running:
-            for n, (tracker, shm, pose_matrix) in enumerate(zip(trackers, shms, pose_matrixes)):
-                frame = tracker.read_frame()
-                xyz, conf = tracker.read_coords()            
+        print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
+    print("Streaming enabled")
+    
+    # Data acquisition main loop
+    while running:
+        for n, (tracker, shm, pose_matrix) in enumerate(zip(trackers, shms, pose_matrixes)):
+            frame = tracker.read_frame()
+            xyz, conf = tracker.read_coords()            
 
-                # Write image data into shared memory
-                buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
-                buf[:] = frame[:]
+            # Write image data into shared memory
+            buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
+            buf[:] = frame[:]
 
-                # Trasformazione nel frame Base del Robot
-                if not xyz is None and not conf is None:
-                    # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
-                    xyz_base = transform_points(pose_matrix, xyz.astype(np.float64)).astype(np.float32)
-                    conf = conf.astype(np.float32)
+            # Trasformazione nel frame Base del Robot
+            if not xyz is None and not conf is None:
+                # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
+                xyz_base = transform_points(pose_matrix, xyz.astype(np.float64)).astype(np.float32)
+                conf = conf.astype(np.float32)
 
-                    # if n == 1:
-                    #     xyz_base = np.full((17, 3), np.nan, dtype=np.float32)          
+                # if n == 1:
+                #     xyz_base = np.full((17, 3), np.nan, dtype=np.float32)          
 
-                    payload = (xyz_base, conf)
-                    message = f"{topic}_{n}; {len(devices)}; {json.dumps(payload[0].tolist())}; {json.dumps(payload[1].tolist())}"  # Still have to add conf
-                    socket.send_string(message)
+                payload = (xyz_base, conf)
+                message = f"{topic}_{n}; {len(devices)}; {json.dumps(payload[0].tolist())}; {json.dumps(payload[1].tolist())}"  # Still have to add conf
+                socket.send_string(message)
 
-                if not frame is None:
-                    if display_stream:
-                        cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
+            if not frame is None:
+                if display_stream:
+                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
 
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            break
-                    # Video saving
-                    if n == 0:
-                        if save_video and video_writer is not None:
-                            video_writer.write(frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                # Video saving
+                if n == 0:
+                    if save_video and video_writer is not None:
+                        video_writer.write(frame)
 
+    for shm in shms:
         shm.close()
         shm.unlink()  # Delete the shared memory block
     
-    finally:
-        # Wait for both to finish
-        for tracker in trackers:
-            tracker.stop()
+    # Wait for both to finish
+    for tracker in trackers:
+        tracker.stop()
 
-        # Resources cleanup
-        print("Chiusura pipeline e finestre...")
-        cv2.destroyAllWindows()
-        if video_writer is not None:
-            video_writer.release()
-        socket.close()
-        # ctx.term()
+    # Resources cleanup
+    print("Chiusura pipeline e finestre...")
+    cv2.destroyAllWindows()
+    if video_writer is not None:
+        video_writer.release()
+    socket.close()
+    # ctx.term()
 
 
 # Main loop to read from camera, process skeleton and send data via ZeroMQ

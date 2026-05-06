@@ -5,41 +5,23 @@
 ░█▄█░█▀▀░█▀▄░░░░█░░█░█░░█░░█▀▀░█▀▄░█▀▀░█▀█░█░░░█▀▀
 ░▀░▀░▀▀▀░▀▀░░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀
 
-0: Nose
-1: Left Eye
-2: Right Eye
-3: Left Ear
-4: Right Ear
-5: Left Shoulder
-6: Right Shoulder
-7: Left Elbow
-8: Right Elbow
-9: Left Wrist
-10: Right Wrist
-11: Left Hip
-12: Right Hip
-13: Left Knee
-14: Right Knee
-15: Left Ankle
-16: Right Ankle 
+User interface for the rendering of the 3D reconstruction
+of the skeleton, according to the following keypoint convention:
+0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
+5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
+9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
+13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
 """
 
-
-import plotly.express as px
 import plotly.graph_objs as go
-import cv2
 import zmq
-import json
-import threading
 import time
-import base64
 import numpy as np
-import multiprocessing.resource_tracker as rt
 import webbrowser
 from dash import Dash, dcc, html, Input, Output
 from statistics import mean
-from multiprocessing import shared_memory
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
+from utils.skeleton_receiver import SkeletonReceiver
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -67,92 +49,13 @@ marker_sz = 8
 line_wdt = 5
 t0 = time.time()
 
+
 # Launching Dash app
 app = Dash(__name__)
 
 # Initializing kalman filter classes
-kfs = [ImprovedKalmanFilter6D() for _ in range(skel_len)]
-# kfs = [NormalKalmanFilter() for _ in range(skel_len)]
-
-
-# Unregister shared_memory folder
-def remove_shm_from_resource_tracker(name):
-    rt.unregister(f"/{name}", "shared_memory")
-
-
-# Convert OpenCV image to base64 data URI
-def cv2_to_b64(img):
-    is_success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-    if not is_success: 
-        return None
-    encoded = base64.b64encode(buffer).decode("utf-8")
-    return "data:image/jpeg;base64," + encoded
-
-
-# Starting thread for data acquisition from camera_stream
-class SkeletonVisualizer:
-    def __init__(self, n: int):
-        zctx = zmq.Context.instance()
-        socket = zctx.socket(zmq.SUB)
-        socket.setsockopt(zmq.CONFLATE, 1)
-        socket.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
-        socket.connect(endpoint)
-        self.socket = socket
-
-        self.n_device = n
-        self.started = False
-        self.skeleton = None
-        self.confidence = None
-        self.frame = None
-
-    def start(self):
-        self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.data_receiver, args=(self.n_device,))
-        if self.started:
-            return
-        self.started = True
-        self.thread.start()
-        return self
-
-    def data_receiver(self, n: int):
-        global running
-        while running:
-            x, _, msg1, msg2 = self.socket.recv_string().split("; ", 3)
-            skeleton = json.loads(msg1)
-            confidence = json.loads(msg2)
-            with self.mutex:
-                self.skeleton = skeleton
-                self.confidence = confidence
-
-            shm = shared_memory.SharedMemory(name=f"shared_image_{n}")
-            remove_shm_from_resource_tracker(shm.name) 
-            arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
-            img = arr.copy()
-            frame = cv2_to_b64(img)
-            shm.close() 
-            with self.mutex:
-                self.frame = frame
-
-    def read_skeleton(self):
-        with self.mutex:
-            skeleton = self.skeleton.copy() if self.skeleton is not None else None
-        return skeleton
-    
-    def read_confidence(self):
-        with self.mutex:
-            confidence = self.confidence.copy() if self.confidence is not None else None
-        return confidence
-    
-    def read_frame(self):
-        with self.mutex:
-            frame = self.frame if self.frame is not None else None
-        return frame
-    
-    def stop(self):
-        self.started = False
-        self.thread.join()
-        self.socket.close()
-        return self
+# kfs = [ImprovedKalmanFilter6D() for _ in range(skel_len)]
+kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
 
 @app.callback([Output("graph", "figure"), Output("img_1", "src"), Output("img_2", "src"), Output("img_3", "src"), Output("img_4", "src")], Input('interval-component', 'n_intervals'))
@@ -211,10 +114,6 @@ def update_bar_chart(n_intervals):
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
                           marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
     
-    # if time.time() - t0 >= 10:
-    #     global running
-    #     running = False
-    #     quit()
         
     fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
 
@@ -257,7 +156,7 @@ def main():
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    interfaces = [SkeletonVisualizer(n).start() for n in range(int(n_devices))]
+    interfaces = [SkeletonReceiver(n).start() for n in range(int(n_devices))]
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
 
