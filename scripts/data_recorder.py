@@ -139,7 +139,7 @@ def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
             lines = file.readlines()
             if stream_cnt >= len(lines):
                 print(f"[stream_data] no more skeleton lines for device {n}")
-                return
+                return "reset"
             skeleton_line = lines[stream_cnt]
 
         x, _, msg1, msg2 = skeleton_line.split("; ", 3)
@@ -147,19 +147,13 @@ def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
         confidence = json.loads(msg2)
 
         payload = (skeleton, confidence)
-        message = (
-            f"{topic}_{n}; {n_devices}; "
-            f"{json.dumps(payload[0])}; {json.dumps(payload[1])}"
-        )
+        message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
         socket.send_string(message)
-
-
-
 
         frame = read_frame(frames_bin[n], frames_idx[n], stream_cnt)
         if frame is None:
             print(f"[stream_data] could not load frame {stream_cnt}")
-            return
+            return "reset"
 
         # Write into shared memory
         buf = np.ndarray(frame.shape, dtype=frame.dtype, buffer=shms[n].buf)
@@ -172,19 +166,20 @@ def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
 # Filename helpers  (now returns .bin + .idx instead of a single .txt)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def init_filenames(_arg):
+def init_filenames(arg):
     data_dir = os.path.join(script_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
 
-    skeletons_filename = [
-        os.path.join(data_dir, f"skeleton_{n}.txt") for n in range(int(n_devices))
-    ]
-    frames_bin = [
-        os.path.join(data_dir, f"frame_{n}.bin") for n in range(int(n_devices))
-    ]
-    frames_idx = [
-        os.path.join(data_dir, f"frame_{n}.idx") for n in range(int(n_devices))
-    ]
+    skeletons_filename = [os.path.join(data_dir, f"skeleton_{n}.txt") for n in range(int(n_devices))]
+    frames_bin = [os.path.join(data_dir, f"frame_{n}.bin") for n in range(int(n_devices))]
+    frames_idx = [os.path.join(data_dir, f"frame_{n}.idx") for n in range(int(n_devices))]
+
+    if arg == "r":
+        for n in range(int(n_devices)):
+            open(skeletons_filename[n], "w")
+            open(frames_bin[n], "w")
+            open(frames_idx[n], "w")
+            
     return skeletons_filename, frames_bin, frames_idx
 
 
@@ -248,33 +243,40 @@ def setup_streaming(frames_bin_0: str, frames_idx_0: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    global n_devices
+    global n_devices, stream_cnt
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     if arg is None:
         raise ValueError("No argument provided. Use --record or --stream.")
 
     if arg in ["--record", "-r"]:
-        print("Recording mode enabled. Press Ctrl+C to stop.")
-        sockets, shms, n_devices = setup_recording()
-        skeletons_filename, frames_bin, frames_idx = init_filenames("r")
         while True:
-            record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx)
-            time.sleep(0.05)
+            res = input("\nRecorded data are still presents in the working directory. Do you want to overwrite them? (y/n)\n")
+            if res == "y":
+                print("Recording mode enabled. Press Ctrl+C to stop.")
+                sockets, shms, n_devices = setup_recording()
+                skeletons_filename, frames_bin, frames_idx = init_filenames("r")
+                while True:
+                    record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx)
+                    time.sleep(0.05)
+            if res == "n":
+                break
+            else:
+                print("Unknown answer")
+                continue
 
     elif arg in ["--stream", "-s"]:
         print("Streaming mode enabled. Press Ctrl+C to stop.")
         data_dir = os.path.join(script_dir, "data")
-        # Each device produces a .bin and a .idx → divide file count by 4
-        # (skeleton.txt + frame.bin + frame.idx = 3 files per device, plus skeleton = 4 total)
-        # Safer: count .bin files directly
         n_devices = sum(1 for f in os.listdir(data_dir) if f.endswith(".bin"))
         skeletons_filename, frames_bin, frames_idx = init_filenames("s")
         socket, shms = setup_streaming(frames_bin[0], frames_idx[0])
         time.sleep(3)
         try:
             while True:
-                stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
+                res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
+                if res == "reset":
+                    stream_cnt = 0
                 time.sleep(0.05)
         finally:
             for shm in shms:

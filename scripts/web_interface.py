@@ -22,6 +22,7 @@ from dash import Dash, dcc, html, Input, Output
 from statistics import mean
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.skeleton_receiver import SkeletonReceiver
+from copy import deepcopy
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -39,6 +40,9 @@ running = True
 camera = dict(up=dict(x=0, y=0, z=1),
         center=dict(x=0, y=0, z=-0.1),
         eye=dict(x=0, y=2, z=0.5))
+camera2 = dict(up=dict(x=0, y=0, z=1),
+        center=dict(x=0, y=0, z=-0.1),
+        eye=dict(x=2, y=0, z=0.5))
 data = None
 pic = None
 interfaces = None
@@ -48,6 +52,7 @@ dtype = np.uint8
 marker_sz = 8
 line_wdt = 5
 t0 = time.time()
+ret_prev = []
 
 
 # Launching Dash app
@@ -61,6 +66,7 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 @app.callback([Output("graph", "figure"), Output("img_1", "src"), Output("img_2", "src"), Output("img_3", "src"), Output("img_4", "src")], Input('interval-component', 'n_intervals'))
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
+    global ret_prev
     skeletons = [interface.read_skeleton() for interface in interfaces]
     confidences = [interface.read_confidence() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
@@ -83,17 +89,21 @@ def update_bar_chart(n_intervals):
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt), opacity=0.8)
         
+    print(x)
     # print(x, y, z)
-    mean_x = mean([x for x in x if not np.isnan(x)])
-    mean_y = mean([y for y in y if not np.isnan(y)])
-    mean_z = mean([z for z in z if not np.isnan(z)])
-    
-    mass_center = [mean_x, mean_y, mean_z]
-    scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-1, mass_center[0]+1],),
-                yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
-                zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
+    try:
+        mean_x = mean([x for x in x if not np.isnan(x)])
+        mean_y = mean([y for y in y if not np.isnan(y)])
+        mean_z = mean([z for z in z if not np.isnan(z)])
+        
+        mass_center = [mean_x, mean_y, mean_z]
+        scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-1, mass_center[0]+1],),
+                    yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
+                    zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
+    except:
+        return ret_prev
 
-    """x = [pnt[0] for pnt in skeletons[0]]
+    x = [pnt[0] for pnt in skeletons[0]]
     y = [pnt[1] for pnt in skeletons[0]]
     z = [pnt[2] for pnt in skeletons[0]]
     for (a, b) in EDGES:
@@ -105,7 +115,7 @@ def update_bar_chart(n_intervals):
     z = [pnt[2] for pnt in skeletons[1]]
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)"""
+                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)
         
     fig.add_scatter3d(x=[0, 0.1], y=[0, 0], z=[0, 0], mode='markers+lines', 
                           marker=dict(color='red', size=marker_sz), line=dict(color='red', width=line_wdt), opacity=0.8)
@@ -113,9 +123,12 @@ def update_bar_chart(n_intervals):
                           marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.8)
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
                           marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
-    
-        
-    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1500, margin=dict(r=20, l=20, b=10, t=10))
+
+    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=800, width=1000, margin=dict(r=20, l=20, b=10, t=10))
+
+    # Property "figure2" was used with component ID: "graph2" in one of the Output items of a callback. 
+    # This ID is assigned to a dash_core_components.Graph component in the layout, which does not support this property. 
+    # This ID was used in the callback(s) for Output(s): graph.figure, graph2.figure2, img_1.src, img_2.src, img_3.src, img_4.src
 
     ret = [fig]
     for i in range(4):
@@ -123,6 +136,7 @@ def update_bar_chart(n_intervals):
             ret.append(frames[i])
         except:
             ret.append(None)
+    ret_prev = ret
 
     return ret
 
