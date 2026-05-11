@@ -28,8 +28,8 @@ COCO_SKELETON = [
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 
 # Parameters
-r_endpoint = "tcp://localhost:6000"
-s_endpoint = "tcp://*:6000"
+in_port = 6000
+out_port = 6000
 topic = "SKEL"
 running = True
 camera = dict(up=dict(x=0, y=0, z=1),
@@ -205,7 +205,7 @@ def setup_recording():
     zctx = zmq.Context.instance()
     probe = zctx.socket(zmq.SUB)
     probe.setsockopt_string(zmq.SUBSCRIBE, topic)
-    probe.connect(r_endpoint)
+    probe.connect(f"tcp://localhost:{in_port}")
     _, n_dev, _ = probe.recv_string().split("; ", 2)
     probe.close()
 
@@ -215,7 +215,7 @@ def setup_recording():
         sock = zmq.Context.instance().socket(zmq.SUB)
         sock.setsockopt(zmq.CONFLATE, 1)
         sock.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
-        sock.connect(r_endpoint)
+        sock.connect(f"tcp://localhost:{in_port}")
         sockets.append(sock)
 
         shm = shared_memory.SharedMemory(name=f"shared_image_{n}")
@@ -228,7 +228,7 @@ def setup_recording():
 def setup_streaming(frames_bin_0: str, frames_idx_0: str):
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.PUB)
-    socket.bind(s_endpoint)
+    socket.bind(f"tcp://*:{out_port}")
 
     # Wait until at least one frame is available
     while count_frames(frames_idx_0) == 0:
@@ -294,6 +294,7 @@ def main():
             while True:
                 if not paused:
                     res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
+                    print(n_devices)
                     if res == "reset":
                         stream_cnt = 0
                     time.sleep(0.05)

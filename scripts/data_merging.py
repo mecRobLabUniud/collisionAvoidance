@@ -23,8 +23,8 @@ from utils.skeleton_receiver import SkeletonReceiver
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
-r_endpoint = "tcp://localhost:6000"
-s_endpoint = "tcp://*:7000"
+in_port = 6000
+out_port = 7000
 topic = "SKEL"
 interfaces = None
 n_devices = 0
@@ -49,7 +49,7 @@ def merging(interfaces, socket):
         conf = [confidence[i] for confidence in confidences if not confidence==None]
         fused_skels.append(kfs[i].step(skel, conf).tolist())
 
-    message = f"{topic}; {len(n_devices)}; {json.dumps(fused_skels)}; {json.dumps(conf)}"
+    message = f"{topic}; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
     socket.send_string(message)
 
     print(f"Time: {time.time()-t0}")
@@ -63,16 +63,16 @@ def main():
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-    socket.connect(r_endpoint)
+    socket.connect(f"tcp://localhost:{in_port}")
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    interfaces = [SkeletonReceiver(n).start() for n in range(int(n_devices))]
+    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
 
     # Inizializzazione ZeroMQ (Publisher)
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.PUB)
-    socket.bind(s_endpoint)
+    socket.bind(f"tcp://*:{out_port}")
 
     while True:
         merging(interfaces, socket)

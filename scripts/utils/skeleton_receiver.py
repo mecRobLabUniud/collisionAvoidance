@@ -17,7 +17,6 @@ import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
 
 # Parameters
-endpoint = "tcp://localhost:6000"
 topic = "SKEL"
 pic = None
 H, W, C = 480, 848, 3 
@@ -25,12 +24,12 @@ dtype = np.uint8
 
 # Starting thread for data acquisition from camera_stream
 class SkeletonReceiver:
-    def __init__(self, n: int):
+    def __init__(self, n: int, port: int):
         zctx = zmq.Context.instance()
         socket = zctx.socket(zmq.SUB)
         socket.setsockopt(zmq.CONFLATE, 1)
         socket.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
-        socket.connect(endpoint)
+        socket.connect(f"tcp://localhost:{port}")
         self.socket = socket
 
         try:

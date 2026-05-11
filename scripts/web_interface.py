@@ -34,7 +34,7 @@ COCO_SKELETON = [
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 
 # Parameters
-endpoint = "tcp://localhost:6000"
+in_port = 7000
 topic = "SKEL"
 running = True
 camera = dict(up=dict(x=0, y=0, z=1),
@@ -68,19 +68,20 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 def update_bar_chart(n_intervals):
     global ret_prev
     skeletons = [interface.read_skeleton() for interface in interfaces]
-    confidences = [interface.read_confidence() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
+
+    print(skeletons)
 
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
     # print("\n================================\n")
 
-    fused_skels = []
-    for i in range(skel_len):
-        skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
-        conf = [confidence[i] for confidence in confidences]
-        # print(f"Keypoint {i}: {[c for c in conf]}")
-        fused_skels.append(kfs[i].step(skel, conf))
+    fused_skels = skeletons[0]
+    # for i in range(skel_len):
+    #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
+    #     conf = [confidence[i] for confidence in confidences]
+    #     # print(f"Keypoint {i}: {[c for c in conf]}")
+    #     fused_skels.append(kfs[i].step(skel, conf))
 
     x = [pnt[0] for pnt in fused_skels]
     y = [pnt[1] for pnt in fused_skels]
@@ -100,20 +101,6 @@ def update_bar_chart(n_intervals):
                     zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
     except:
         return ret_prev
-
-    x = [pnt[0] for pnt in skeletons[0]]
-    y = [pnt[1] for pnt in skeletons[0]]
-    z = [pnt[2] for pnt in skeletons[0]]
-    for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='grey', size=marker_sz), line=dict(color='grey', width=line_wdt), opacity=0.5)
-
-    x = [pnt[0] for pnt in skeletons[1]]
-    y = [pnt[1] for pnt in skeletons[1]]
-    z = [pnt[2] for pnt in skeletons[1]]
-    for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.5)
         
     fig.add_scatter3d(x=[0, 0.1], y=[0, 0], z=[0, 0], mode='markers+lines', 
                           marker=dict(color='red', size=marker_sz), line=dict(color='red', width=line_wdt), opacity=0.8)
@@ -164,11 +151,13 @@ def main():
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-    socket.connect(endpoint)
+    socket.connect(f"tcp://localhost:{in_port}")
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    interfaces = [SkeletonReceiver(n).start() for n in range(int(n_devices))]
+    print(n_devices)
+
+    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
 

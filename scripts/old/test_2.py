@@ -19,7 +19,7 @@ import io
 import pyvista as pv
 from flask_socketio import SocketIO
 from dash import Dash, dcc, html, Input, Output
-import threading
+from utils.skeleton_receiver import SkeletonReceiver
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -42,6 +42,7 @@ socket = None
 thread = None
 data = None
 running = True
+interface = None
 
 app = Flask(__name__)
 
@@ -88,13 +89,15 @@ dash_app.layout = html.Div([
 # Read image data from shared memory
 def stream():
     while True:
-        shm = shared_memory.SharedMemory(name="shared_image0")
+        shm = shared_memory.SharedMemory(name="shared_image_0")
         remove_shm_from_resource_tracker(shm.name)
 
         arr = np.ndarray((H, W, C), dtype=dtype, buffer=shm.buf)
         img = arr.copy()
         pic = cv2_to_b64(img)
         shm.close()
+
+        frame = interface.read_frame()
 
         socketio.emit('update_stream', {'frame': pic})
         socketio.sleep(0.05)  # ~60 FPS
@@ -138,59 +141,21 @@ def index():
 
 
 
-class SkeletonVisualizer:
-    def __init__(self, socket):
-        self.started = False
-        self.socket = socket
-        self.data = None
-        self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.data_receiver, args=())
-
-    def start(self):
-        if self.started:
-            return
-        self.started = True
-        self.thread.start()
-        return self
-
-    def data_receiver(self):
-        global running, data, pic
-        while running:
-            topic, message = self.socket.recv_string().split(" ", 1)
-            array = json.loads(message)
-            # print(f"Received: {array}")
-            with self.mutex:
-                self.data = array
-                data = array
-
-    def read_frame(self):
-        with self.mutex:
-            frame = self.data.copy() if self.data is not None else None
-        return frame
-    
-    def stop(self):
-        self.started = False
-        self.thread.join()
-        return self
-    
-
 
 
 def main():
-    global socket, topic
+    global socket, topic, interface
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
     socket.setsockopt(zmq.CONFLATE, 1)
     socket.setsockopt_string(zmq.SUBSCRIBE, topic)
     socket.connect(endpoint)
 
+    interface = SkeletonReceiver(0).start()
+
     webbrowser.open_new('http://127.0.0.1:5000/')
 
-    vis = SkeletonVisualizer(socket).start()
-
     socketio.run(app, host="127.0.0.1", port=5000)
-
-    vis.stop()
 
 
 
