@@ -103,5 +103,7 @@ class MarkerDetector:
             # Display the resulting frame
             cv2.imshow('frame', frame)
             key = cv2.waitKey(50) & 0xFF
-            if key == ord('q'):
+            if key == ord('y'):
                 return rotation_matrix
+            elif key == ord('n'):
+                return None

@@ -16,7 +16,7 @@ import json
 import struct
 import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
-
+import threading
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -47,6 +47,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 stream_cnt = 0
 n_devices = 0
 frame_id = 0
+paused = False
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame I/O  (binary .bin + .idx)
@@ -61,6 +62,19 @@ frame_id = 0
 
 FRAME_BYTES = H * W * C  # fixed for the whole recording session
 
+
+def listen_for_input():
+    """Listen for keyboard input in a separate thread."""
+    global paused
+    while True:
+        key = input()
+        if key.strip().lower() == '' and paused:
+            paused = False
+            print("\n▶  Loop RESUMED")
+        elif key.strip().lower() == '' and not paused:
+            paused = True
+            print("\n⏸  Loop PAUSED")
+ 
 
 def write_frame(bin_path: str, idx_path: str, frame: np.ndarray):
     """Append one BGR/RGB frame to the binary store and update the index."""
@@ -246,11 +260,15 @@ def main():
     global n_devices, stream_cnt
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
+    # Start input listener in background thread
+    input_thread = threading.Thread(target=listen_for_input, daemon=True)
+    input_thread.start()
+
     if arg is None:
         raise ValueError("No argument provided. Use --record or --stream.")
 
     if arg in ["--record", "-r"]:
-        while True:
+        while running:
             res = input("\nRecorded data are still presents in the working directory. Do you want to overwrite them? (y/n)\n")
             if res == "y":
                 print("Recording mode enabled. Press Ctrl+C to stop.")
@@ -271,13 +289,16 @@ def main():
         n_devices = sum(1 for f in os.listdir(data_dir) if f.endswith(".bin"))
         skeletons_filename, frames_bin, frames_idx = init_filenames("s")
         socket, shms = setup_streaming(frames_bin[0], frames_idx[0])
-        time.sleep(3)
+        time.sleep(1)
         try:
             while True:
-                res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
-                if res == "reset":
-                    stream_cnt = 0
-                time.sleep(0.05)
+                if not paused:
+                    res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
+                    if res == "reset":
+                        stream_cnt = 0
+                    time.sleep(0.05)
+                else:
+                    time.sleep(0.1)                
         finally:
             for shm in shms:
                 shm.close()

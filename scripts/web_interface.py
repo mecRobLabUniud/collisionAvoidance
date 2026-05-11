@@ -89,8 +89,6 @@ def update_bar_chart(n_intervals):
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt), opacity=0.8)
         
-    print(x)
-    # print(x, y, z)
     try:
         mean_x = mean([x for x in x if not np.isnan(x)])
         mean_y = mean([y for y in y if not np.isnan(y)])
@@ -124,7 +122,7 @@ def update_bar_chart(n_intervals):
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
                           marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
 
-    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=800, width=1000, margin=dict(r=20, l=20, b=10, t=10))
+    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1400, margin=dict(r=20, l=20, b=10, t=10))
 
     # Property "figure2" was used with component ID: "graph2" in one of the Output items of a callback. 
     # This ID is assigned to a dash_core_components.Graph component in the layout, which does not support this property. 

@@ -66,6 +66,8 @@ def main():
     align = rs.align(rs.stream.color) # Allinea depth a color
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
+
+    print("Press 'y' to accept the proposed reference system, otherwise press 'n' to skip")
     
     for i, device in enumerate(devices):
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), 1920, 1080, 30, False)
