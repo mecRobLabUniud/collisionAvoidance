@@ -6,17 +6,9 @@
 ░▀▀░░▀░▀░░▀░░▀░▀░░░▀░▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
 """
 
-import sys
 import zmq
 import time
-import numpy as np
-import cv2
-import os
 import json
-import struct
-import multiprocessing.resource_tracker as rt
-from multiprocessing import shared_memory
-import threading
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.skeleton_receiver import SkeletonReceiver
 
@@ -29,9 +21,6 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-
-# Initializing kalman filter classes
-# kfs = [ImprovedKalmanFilter6D() for _ in range(skel_len)]
 kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
 

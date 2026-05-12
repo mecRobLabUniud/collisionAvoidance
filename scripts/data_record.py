@@ -10,7 +10,6 @@ import sys
 import zmq
 import time
 import numpy as np
-import cv2
 import os
 import json
 import struct
@@ -18,51 +17,26 @@ import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
 import threading
 
-TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
-COCO_SKELETON = [
-    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-    (5, 7), (7, 9), (6, 8), (8, 10),
-    (5, 6), (5, 11), (6, 12), (11, 12),
-    (11, 13), (13, 15), (12, 14), (14, 16)
-]
-EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
-
+# ─────────────────────────────────────────────────────────────────────────────
 # Parameters
+# ─────────────────────────────────────────────────────────────────────────────
 in_port = 6000
 out_port = 6000
 topic = "SKEL"
 running = True
-camera = dict(up=dict(x=0, y=0, z=1),
-        center=dict(x=0, y=0, z=-0.1),
-        eye=dict(x=0, y=2, z=0.5))
-data = None
-pic = None
-interfaces = None
 skel_len = 17
 H, W, C = 480, 848, 3
-marker_sz = 8
-line_wdt = 5
-t0 = time.time()
+FRAME_BYTES = H * W * C
 script_dir = os.path.dirname(os.path.abspath(__file__))
 stream_cnt = 0
 n_devices = 0
 frame_id = 0
 paused = False
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# Frame I/O  (binary .bin + .idx)
-#
-# .bin layout:  raw H×W×3 uint8 bytes, frames concatenated
-# .idx layout:  one 8-byte little-endian int64 per frame = byte offset in .bin
-#               → frame N starts at offset stored at position N in the index
-#
-# Writing is O(1) per frame.
-# Reading frame N is O(1): seek to idx[N], read H*W*3 bytes.
+# Pause/resume logic
 # ─────────────────────────────────────────────────────────────────────────────
-
-FRAME_BYTES = H * W * C  # fixed for the whole recording session
-
-
 def listen_for_input():
     """Listen for keyboard input in a separate thread."""
     global paused
@@ -76,6 +50,9 @@ def listen_for_input():
             print("\n⏸  Loop PAUSED")
  
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Frames writing
+# ─────────────────────────────────────────────────────────────────────────────
 def write_frame(bin_path: str, idx_path: str, frame: np.ndarray):
     """Append one BGR/RGB frame to the binary store and update the index."""
     # Make sure the frame is exactly H×W×C uint8
@@ -92,6 +69,9 @@ def write_frame(bin_path: str, idx_path: str, frame: np.ndarray):
         f.write(struct.pack("<q", offset))   # int64 little-endian
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Frames reading
+# ─────────────────────────────────────────────────────────────────────────────
 def read_frame(bin_path: str, idx_path: str, target_frame_id: int):
     """Return frame at *target_frame_id* as a (H, W, C) uint8 ndarray, or None."""
     idx_size = os.path.getsize(idx_path) if os.path.exists(idx_path) else 0
@@ -116,6 +96,9 @@ def read_frame(bin_path: str, idx_path: str, target_frame_id: int):
     return np.frombuffer(raw, dtype=np.uint8).reshape(H, W, C).copy()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Count frames
+# ─────────────────────────────────────────────────────────────────────────────
 def count_frames(idx_path: str) -> int:
     """Return the total number of recorded frames in the index."""
     if not os.path.exists(idx_path):
@@ -126,7 +109,6 @@ def count_frames(idx_path: str) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 # Recording
 # ─────────────────────────────────────────────────────────────────────────────
-
 def record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx):
     global frame_id
     for n in range(int(n_devices)):
@@ -143,7 +125,6 @@ def record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx):
 # ─────────────────────────────────────────────────────────────────────────────
 # Streaming
 # ─────────────────────────────────────────────────────────────────────────────
-
 def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
     global stream_cnt
 
@@ -177,9 +158,8 @@ def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Filename helpers  (now returns .bin + .idx instead of a single .txt)
+# Filename helpers
 # ─────────────────────────────────────────────────────────────────────────────
-
 def init_filenames(arg):
     data_dir = os.path.join(script_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -198,9 +178,8 @@ def init_filenames(arg):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ZeroMQ / shared-memory setup  (unchanged logic, minor cleanup)
+# ZeroMQ and shared-memory setup fro incoming data
 # ─────────────────────────────────────────────────────────────────────────────
-
 def setup_recording():
     zctx = zmq.Context.instance()
     probe = zctx.socket(zmq.SUB)
@@ -225,6 +204,9 @@ def setup_recording():
     return sockets, shms, n_dev
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ZeroMQ and shared-memory setup fro outgoing data
+# ─────────────────────────────────────────────────────────────────────────────
 def setup_streaming(frames_bin_0: str, frames_idx_0: str):
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.PUB)
@@ -255,7 +237,6 @@ def setup_streaming(frames_bin_0: str, frames_idx_0: str):
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
-
 def main():
     global n_devices, stream_cnt
     arg = sys.argv[1] if len(sys.argv) > 1 else None

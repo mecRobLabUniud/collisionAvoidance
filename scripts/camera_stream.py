@@ -23,36 +23,33 @@ import pyrealsense2 as rs
 from ultralytics import YOLO
 from multiprocessing import shared_memory
 from utils.skeleton_tracker import SkeletonTracker
- 
-MAGIC = b"SKEL" 
-VERSION = 1
-HDR_FMT = "<4sHHQ"     # magic, version, n_caps, t_mono_ns )
-# REC_FMT = "<8f"        # x1 y1 z1 x2 y2 z2 radius conf
-REC_FMT = "<3f"
-MAX_CAPS = 32
 
+# ─────────────────────────────────────────────────────────────────────────────
 # Parameters
-w_camera, h_camera = 848, 480
+# ─────────────────────────────────────────────────────────────────────────────
+W, H = 848, 480
 running = True
-arms_radius = 0.20     # Raggio della capsula (cilindro) attorno all'osso (metri)
-torso_radius = 0.3     # Raggio maggiorato per la capsula del busto (metri)
-endpoint = "tcp://*:6000"
+out_port = 7000
 topic = "SKEL"
-save_video = False      # Imposta a True per salvare il video, False altrimenti
+save_video = False
 display_stream = False
-script_dir = os.path.dirname(os.path.abspath(__file__)) # Obtain the directory where this script is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
-yolo_model = "yolo26n-pose" # "yolov8x-pose.pt"
+yolo_model = "yolo26n-pose"
 
 
-# Function to load the rigid transformation matrix from a text file
+# ─────────────────────────────────────────────────────────────────────────────
+# Load pose matrix
+# ─────────────────────────────────────────────────────────────────────────────
 def load_pose_matrix(path_txt):
     T = np.loadtxt(path_txt, dtype=np.float64)
     assert T.shape == (4, 4)
     return T
 
 
-# Function to apply a rigid transformation T (4x4) to a set of 3D points pts_xyz (N,3)
+# ─────────────────────────────────────────────────────────────────────────────
+# Coordinates transformation
+# ─────────────────────────────────────────────────────────────────────────────
 def transform_points(T, pts_xyz):
     # pts_h: punti omogenei (N,4), aggiungendo una colonna di 1 in coda
     pts_h = np.concatenate([pts_xyz, np.ones((pts_xyz.shape[0], 1))], axis=1)
@@ -60,9 +57,10 @@ def transform_points(T, pts_xyz):
     return (T @ pts_h.T).T[:, :3] # ritorna solo le prime 3 colonne (X,Y,Z) di tutte le righe
 
 
-# Function to enable tracking thread for each device and share data with connected applications
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton tracking
+# ─────────────────────────────────────────────────────────────────────────────
 def tracking(align, model, socket, video_writer):
-    
     # Devices initialization
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
@@ -70,25 +68,26 @@ def tracking(align, model, socket, video_writer):
     shms = []
     pose_matrixes = []
     for i, device in enumerate(devices):
-        # Create tracker block
+        # Create trackers
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
         trackers.append(tracker)
 
         frame = None
         while frame is None:
             frame = tracker.read_frame()
+        nbytes = frame.nbytes
         shape = frame.shape
         dtype = frame.dtype
 
         try:
-            # Create shared memory block
-            shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name=f"shared_image_{i}")
+            # Create shared memory
+            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image_{i}")
         except FileExistsError:
             # If the shared memory block already exists, unlink it and create a new one
             existing_shm = shared_memory.SharedMemory(name=f"shared_image_{i}")
             existing_shm.close()
             existing_shm.unlink()
-            shm = shared_memory.SharedMemory(create=True, size=frame.nbytes, name=f"shared_image_{i}")
+            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image_{i}")
         shms.append(shm)
 
         serial = tracker.get_serial_number()
@@ -96,7 +95,7 @@ def tracking(align, model, socket, video_writer):
         pose_matrixes.append(pose_matrix)
 
         print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
-    print("Streaming enabled")
+    print("Streaming started")
     
     # Data acquisition main loop
     while running:
@@ -148,7 +147,9 @@ def tracking(align, model, socket, video_writer):
     # ctx.term()
 
 
-# Main loop to read from camera, process skeleton and send data via ZeroMQ
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point 
+# ─────────────────────────────────────────────────────────────────────────────
 def main():    
     # pose_matrix = load_pose_matrix(os.path.join(script_dir, "../rotation_matrix.txt")) # Carica calibrazione camera-robot
     align = rs.align(rs.stream.color) # Allinea depth a color
@@ -157,12 +158,12 @@ def main():
     # Inizializzazione ZeroMQ (Publisher)
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.PUB)
-    socket.bind(endpoint)
+    socket.bind(f"tcp://*:{out_port}")
 
     # Inizializzazione VideoWriter
     video_writer = None
     if save_video:
-        video_writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (w_camera, h_camera))
+        video_writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (W, H))
 
     # Gestione segnali per chiusura pulita (es. CTRL+C o kill da script bash)
     def signal_handler(sig, frame):
@@ -174,6 +175,5 @@ def main():
     tracking(align, model, socket, video_writer)
     
 
-# Entry point
 if __name__ == "__main__":
     main()
