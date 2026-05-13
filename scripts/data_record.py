@@ -220,6 +220,8 @@ def setup_streaming(frames_bin_0: str, frames_idx_0: str):
     assert frame is not None, "Could not read first frame from binary store"
     print(f"First frame shape: {frame.shape}")
 
+    print("==============> ", frame.nbytes)
+
     shms = []
     for i in range(int(n_devices)):
         try:
