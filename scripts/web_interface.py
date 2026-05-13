@@ -70,8 +70,6 @@ def update_bar_chart(n_intervals):
     skeletons = [interface.read_skeleton() for interface in interfaces]
     frames = [interface.read_frame() for interface in interfaces]
 
-    print(skeletons)
-
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
     # print("\n================================\n")
@@ -155,9 +153,14 @@ def main():
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    print(n_devices)
-
     interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
+
+    skeleton = interfaces[0].read_skeleton() 
+
+    while True:
+        print(skeleton)
+
+
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
 

@@ -7,27 +7,41 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO
 from utils.skeleton_receiver import SkeletonReceiver
 
+TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
+COCO_SKELETON = [
+    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
+    (5, 7), (7, 9), (6, 8), (8, 10),
+    (5, 6), (5, 11), (6, 12), (11, 12),
+    (11, 13), (13, 15), (12, 14), (14, 16)
+]
+EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-interface = None
+interfaces = None
 in_port = 7000
+topic = "SKEL"
 
 # --- ZMQ thread: receives skeleton/point data and emits to browser ---
 def zmq_thread():
     
 
     while True:
-        skeleton = interface.read_skeleton() 
-        fused_skels = skeleton[0]
-
-        x = [pnt[0] for pnt in fused_skels]
-        y = [pnt[1] for pnt in fused_skels]
-        z = [pnt[2] for pnt in fused_skels]
-
-        print( x)
-
-        msg = {"x": [...], "y": [...], "z": [...]}
-        socketio.emit("update_scatter", msg)
+        try:
+            skeletons = [interface.read_skeleton() for interface in interfaces]
+            fused_skels = skeletons[0]
+            x = [pnt[0] for pnt in fused_skels]
+            y = [pnt[1] for pnt in fused_skels]
+            z = [pnt[2] for pnt in fused_skels]
+            for (a, b) in EDGES:
+                msg = {"x": [x[a], x[b]], "y": [y[a], y[b]], "z": [z[a], z[b]]}
+                # msg = {"x": [x[0], x[1]], "y": [y[0], y[1]], "z": [z[0], z[1]]}
+                # socketio.emit("update_scatter", msg)
+                # msg = {"x": [x[2], x[1]], "y": [y[2], y[1]], "z": [z[2], z[1]]}
+                socketio.emit("update_scatter", msg)
+        except Exception as e:
+            print(f"Skeleton thread error: {e}")
+        socketio.emit("display_scatter")
+        socketio.sleep(0.02) 
 
 
 # --- Shared-memory / shared-image thread ---
@@ -37,20 +51,13 @@ def image_thread():
 
     while True:
         try:
-            # fd = os.open(f"/dev/shm{shm_name}", os.O_RDONLY)
-            # with mmap.mmap(fd, shm_size, access=mmap.ACCESS_READ) as shm:
-            #     raw = bytes(shm[:shm_size])
-            # os.close(fd)
-# 
-            # frame_b64 = base64.b64encode(raw).decode("utf-8")
-            # socketio.emit("update_stream", {"frame": frame_b64})
-
-            frame = interface.read_frame()
+            frames = [interface.read_frame() for interface in interfaces]
+            frame = frames[0]
             socketio.emit("update_stream", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
 
-        socketio.sleep(0.033)             # ~30 fps
+        socketio.sleep(0.02)             # ~30 fps
 
 
 @app.route("/")
@@ -58,11 +65,21 @@ def index():
     return render_template("index.html")
 
 
-if __name__ == "__main__":
-    
+def main():
+    global interfaces
+    zctx = zmq.Context.instance()
+    socket = zctx.socket(zmq.SUB)
+    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    socket.connect(f"tcp://localhost:{in_port}")
+    _, n_devices, _ = socket.recv_string().split("; ", 2)
+    socket.close()
 
-    interface = SkeletonReceiver(0, in_port).start()
+    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
 
-    # threading.Thread(target=zmq_thread, daemon=True).start()              
+    threading.Thread(target=zmq_thread, daemon=True).start()              
     threading.Thread(target=image_thread, daemon=True).start()
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+
+
+if __name__ == "__main__":
+    main()

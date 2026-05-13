@@ -128,7 +128,7 @@ def record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx):
 def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
     global stream_cnt
 
-    print(f"Streaming frame {stream_cnt}")
+    print(f"\rStreaming frame {stream_cnt}", end="")
     for n in range(n_devices):
         with open(skeletons_filename[n], "r") as file:
             lines = file.readlines()
@@ -275,7 +275,6 @@ def main():
             while True:
                 if not paused:
                     res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
-                    print(n_devices)
                     if res == "reset":
                         stream_cnt = 0
                     time.sleep(0.05)

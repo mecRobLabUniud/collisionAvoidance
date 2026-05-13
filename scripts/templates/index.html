@@ -9,14 +9,17 @@
 </head>
 <body>
     <h1 style="font-size:50px;">Skeleton tracking with Realsense cameras</h1>
-    <div style="display:flex; height:1500px">
+    <p id="x"></p>
+    <p id="y"></p>
+    <p id="z"></p>
 
-        <div style="width:50%; height:100%">
+    <div style="display:flex; height:1000px">
+        <div style="width:70%; height:100%">
             <h2 style="font-size:30px;">3D plot</h2>
             <div id="plot" style="width:100%; height:100%;"></div>
         </div>
 
-        <div style="width:50%; height:100%">
+        <div style="width:30%; height:100%">
             <h2 style="font-size:30px;">Streaming</h2>
             <img id="image" src="" style="max-width:100%;">
         </div>
@@ -29,7 +32,7 @@
         let plotInitialized = false;
 
         const layout = {
-            title: '3D Scatter Plot',
+            title: '3D Skeleton Reconstruction',
             scene: {
                 xaxis: { title: 'X', range: [-2, 2] },
                 yaxis: { title: 'Y', range: [-2, 2] },
@@ -38,15 +41,41 @@
             margin: { l: 0, r: 0, b: 0, t: 50 }
         };
 
+        let x_data = []
+        let y_data = []
+        let z_data = []
+
         socket.on('update_scatter', function(point) {
+            
+
+            x_data.push(point.x[0], point.x[1], null);
+            y_data.push(point.y[0], point.y[1], null);
+            z_data.push(point.z[0], point.z[1], null);
+
+            // document.getElementById('x').innerHTML = x_data;
+            // document.getElementById('y').innerHTML = y_data;
+            // document.getElementById('z').innerHTML = z_data;            
+        });
+
+        socket.on('display_scatter', function() {
+            // document.getElementById('x').innerHTML = x_data;
+            // document.getElementById('y').innerHTML = y_data;
+            // document.getElementById('z').innerHTML = z_data;
+
             const trace = {
-                x: point.x,
-                y: point.y,
-                z: point.z,
-                mode: 'markers',
-                marker: { size: 12, color: 'rgb(255,0,0)', opacity: 0.8 },
-                type: 'scatter3d'
-            };
+                x: x_data.slice(),
+                y: y_data.slice(),
+                z: z_data.slice(),
+                mode: 'markers+lines',
+                marker: {
+                    color: 'rgb(127, 127, 127)',
+                    size: 10,
+                    symbol: 'circle',
+                    line: {
+                        color: 'rgb(204, 204, 204)',
+                        width: 5},
+                    opacity: 0.8},
+                type: 'scatter3d'};
 
             if (!plotInitialized) {
                 Plotly.newPlot('plot', [trace], layout);
@@ -55,11 +84,15 @@
                 // react() diffs and redraws only what changed
                 Plotly.react('plot', [trace], layout);
             }
+
+            x_data = []
+            y_data = []
+            z_data = []
         });
 
         // ── Image stream ─────────────────────────────────────────────
         socket.on('update_stream', function(data) {
-            document.getElementById('image').src =data.frame;
+            document.getElementById('image').src = data.frame;
                 //'data:image/jpeg;base64,' + data.frame;  // jpeg is faster than png
         });
     </script>

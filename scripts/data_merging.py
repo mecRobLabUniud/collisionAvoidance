@@ -38,10 +38,15 @@ def merging(interfaces, socket):
         conf = [confidence[i] for confidence in confidences if not confidence==None]
         fused_skels.append(kfs[i].step(skel, conf).tolist())
 
-    message = f"{topic}; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
+    # payload = (skeleton, confidence)
+    # message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
+    # socket.send_string(message)
+    
+    message = f"{topic}_0; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
     socket.send_string(message)
 
-    print(f"Time: {time.time()-t0}")
+    print(f"\rLoop time: {time.time()-t0}", end="")
+    time.sleep(0.02)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -63,6 +68,7 @@ def main():
     socket = zctx.socket(zmq.PUB)
     socket.bind(f"tcp://*:{out_port}")
 
+    print("Merging started correctly\n")
     while True:
         merging(interfaces, socket)
         
