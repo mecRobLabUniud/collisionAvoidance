@@ -34,9 +34,6 @@ def zmq_thread():
             z = [pnt[2] for pnt in fused_skels]
             for (a, b) in EDGES:
                 msg = {"x": [x[a], x[b]], "y": [y[a], y[b]], "z": [z[a], z[b]]}
-                # msg = {"x": [x[0], x[1]], "y": [y[0], y[1]], "z": [z[0], z[1]]}
-                # socketio.emit("update_scatter", msg)
-                # msg = {"x": [x[2], x[1]], "y": [y[2], y[1]], "z": [z[2], z[1]]}
                 socketio.emit("update_scatter", msg)
         except Exception as e:
             print(f"Skeleton thread error: {e}")
@@ -52,12 +49,11 @@ def image_thread():
     while True:
         try:
             frames = [interface.read_frame() for interface in interfaces]
-            frame = frames[0]
-            socketio.emit("update_stream", {"frame": frame})
+            for n, frame in enumerate(frames):
+                socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
-
-        socketio.sleep(0.02)             # ~30 fps
+        socketio.sleep(0.02)
 
 
 @app.route("/")
@@ -69,12 +65,14 @@ def main():
     global interfaces
     zctx = zmq.Context.instance()
     socket = zctx.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    socket.setsockopt_string(zmq.SUBSCRIBE, "MERGE")
     socket.connect(f"tcp://localhost:{in_port}")
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
+    print(n_devices)
+
+    interfaces = [SkeletonReceiver(n, in_port, "MERGE").start() for n in range(int(n_devices))]
 
     threading.Thread(target=zmq_thread, daemon=True).start()              
     threading.Thread(target=image_thread, daemon=True).start()

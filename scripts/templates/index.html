@@ -9,10 +9,7 @@
 </head>
 <body>
     <h1 style="font-size:50px;">Skeleton tracking with Realsense cameras</h1>
-    <p id="x"></p>
-    <p id="y"></p>
-    <p id="z"></p>
-
+    
     <div style="display:flex; height:1000px">
         <div style="width:70%; height:100%">
             <h2 style="font-size:30px;">3D plot</h2>
@@ -20,8 +17,22 @@
         </div>
 
         <div style="width:30%; height:100%">
-            <h2 style="font-size:30px;">Streaming</h2>
-            <img id="image" src="" style="max-width:100%;">
+            <div>
+                <h2 style="font-size:30px;">Streaming</h2>
+                <img id="image1" src="" style="max-width:100%;">
+            </div>
+            <div>
+                <h2 style="font-size:30px;">Streaming</h2>
+                <img id="image2" src="" style="max-width:100%;">
+            </div>
+            <div>
+                <h2 style="font-size:30px;">Streaming</h2>
+                <img id="image3" src="" style="max-width:100%;">
+            </div>
+            <div>
+                <h2 style="font-size:30px;">Streaming</h2>
+                <img id="image4" src="" style="max-width:100%;">
+            </div>
         </div>
     </div>
 
@@ -46,22 +57,12 @@
         let z_data = []
 
         socket.on('update_scatter', function(point) {
-            
-
             x_data.push(point.x[0], point.x[1], null);
             y_data.push(point.y[0], point.y[1], null);
-            z_data.push(point.z[0], point.z[1], null);
-
-            // document.getElementById('x').innerHTML = x_data;
-            // document.getElementById('y').innerHTML = y_data;
-            // document.getElementById('z').innerHTML = z_data;            
+            z_data.push(point.z[0], point.z[1], null);         
         });
 
         socket.on('display_scatter', function() {
-            // document.getElementById('x').innerHTML = x_data;
-            // document.getElementById('y').innerHTML = y_data;
-            // document.getElementById('z').innerHTML = z_data;
-
             const trace = {
                 x: x_data.slice(),
                 y: y_data.slice(),
@@ -91,9 +92,20 @@
         });
 
         // ── Image stream ─────────────────────────────────────────────
-        socket.on('update_stream', function(data) {
-            document.getElementById('image').src = data.frame;
-                //'data:image/jpeg;base64,' + data.frame;  // jpeg is faster than png
+        socket.on('update_stream1', function(data) {
+            document.getElementById('image1').src = data.frame;
+        });
+
+        socket.on('update_stream2', function(data) {
+            document.getElementById('image2').src = data.frame;
+        });
+
+        socket.on('update_stream3', function(data) {
+            document.getElementById('image3').src = data.frame;
+        });
+
+        socket.on('update_stream4', function(data) {
+            document.getElementById('image4').src = data.frame;
         });
     </script>
 </body>

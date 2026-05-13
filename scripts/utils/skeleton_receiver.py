@@ -17,14 +17,14 @@ import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
 
 # Parameters
-topic = "SKEL"
+# topic = "SKEL"
 pic = None
 H, W, C = 480, 848, 3 
 dtype = np.uint8
 
 # Starting thread for data acquisition from camera_stream
 class SkeletonReceiver:
-    def __init__(self, n: int, port: int):
+    def __init__(self, n: int, port: int, topic: str):
         zctx = zmq.Context.instance()
         socket = zctx.socket(zmq.SUB)
         socket.setsockopt(zmq.CONFLATE, 1)
@@ -37,6 +37,10 @@ class SkeletonReceiver:
             self.remove_shm_from_resource_tracker(self.shm.name) 
         except FileNotFoundError:
             self.shm = None
+
+        print("------------")
+        print("n; ", n)
+        print(self.shm)
 
         self.n_device = n
         self.started = False

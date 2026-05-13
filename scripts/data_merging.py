@@ -42,11 +42,11 @@ def merging(interfaces, socket):
     # message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
     # socket.send_string(message)
     
-    message = f"{topic}_0; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
+    message = f"MERGE_0; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
     socket.send_string(message)
 
     print(f"\rLoop time: {time.time()-t0}", end="")
-    time.sleep(0.02)
+    time.sleep(0.2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ def main():
     _, n_devices, _ = socket.recv_string().split("; ", 2)
     socket.close()
 
-    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
+    interfaces = [SkeletonReceiver(n, in_port, "SKEL").start() for n in range(int(n_devices))]
 
     # Inizializzazione ZeroMQ (Publisher)
     zctx = zmq.Context.instance()
