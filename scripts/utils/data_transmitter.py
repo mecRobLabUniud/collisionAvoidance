@@ -26,6 +26,20 @@ dtype = np.uint8
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Decorator
+# ─────────────────────────────────────────────────────────────────────────────
+def requires(mode):
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            if self.mode == mode:
+                func(self, *args, **kwargs)
+            else: 
+                raise AttributeError(f"'{func.__name__}' method is not enabled")
+        return wrapper
+    return decorator
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Data transmitter
 # ─────────────────────────────────────────────────────────────────────────────
 class DataTransmitter:
@@ -34,15 +48,24 @@ class DataTransmitter:
         self.device_id = device_id
         self.port = port
         self.topic = topic
+        self.nbytes = H*W*C
         self.socket = None
         self.shm = None
 
         if self.mode == "sender":
             self.setup_zmq_sender()
             self.setup_shm_sender()
+            self.send_frames = self._send_frames
+            self.send_skeleton_data = self._send_skeleton_data
+            pass
         elif self.mode == "receiver":
+            pass
             self.setup_zmq_receiver()
             self.setup_shm_receiver()
+            self.receive_raw_frames = self._receive_raw_frames
+            self.receive_packed_skeleton_data = self._receive_packed_skeleton_data
+            self.receive_frames = self._receive_frames
+            self.receive_skeleton_data = self._receive_skeleton_data
         else:
             raise ValueError(f"Unknown argument: {self.mode}")
     
@@ -60,14 +83,14 @@ class DataTransmitter:
     # Shared-memory setup for outgoing data
     # ─────────────────────────────────────────────────────────────────────────────
     def setup_shm_sender(self):
-        nbytes = 1221120
+        
         try:
-            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image{self.device_id}")
+            shm = shared_memory.SharedMemory(create=True, size=self.nbytes, name=f"shared_image{self.device_id}")
         except FileExistsError:
             existing = shared_memory.SharedMemory(name=f"shared_image{self.device_id}")
             existing.close()
             existing.unlink()
-            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image{self.device_id}")
+            shm = shared_memory.SharedMemory(create=True, size=self.nbytes, name=f"shared_image{self.device_id}")
         self.shm = shm
 
 
@@ -94,7 +117,8 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     # Send frames via shared-memory
     # ─────────────────────────────────────────────────────────────────────────────
-    def send_frames(self, frame: np.array):
+    @requires("sender")
+    def _send_frames(self, frame: np.array):
         shape = frame.shape
         dtype = frame.dtype
         buf = np.ndarray(shape, dtype=dtype, buffer=self.shm.buf)
@@ -104,123 +128,45 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     # Send skeleton data via ZeroMQ
     # ─────────────────────────────────────────────────────────────────────────────
-    def send_skeleton_data(self, skeleton: np.array, confidence: np.array):
+    @requires("sender")
+    def _send_skeleton_data(self, skeleton: np.array, confidence: np.array):
         message = f"{self.topic}_{self.device_id}; {json.dumps(skeleton.tolist())}; {json.dumps(confidence.tolist())}"  # Still have to add conf
         self.socket.send_string(message)
 
 
-    # @property
-    # def n(self):
-    #     return self.n
-    # 
-    # @property
-    # def port(self):
-    #     return self.port
-    # 
-    # @property
-    # def topic(self):
-    #     return self.topic
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Receive raw frames via shared-memory
+    # ─────────────────────────────────────────────────────────────────────────────
+    @requires("receiver")
+    def _receive_raw_frames(self):
+        return np.ndarray((H, W, C), dtype=np.uint8, buffer=self.shm.buf).copy()
+
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Receive raw skeleton data via ZeroMQ
+    # ─────────────────────────────────────────────────────────────────────────────
+    @requires("receiver")
+    def _receive_packed_skeleton_data(self):
+        return self.socket.recv_string()
     
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Receive encoded frames via shared-memory
+    # ─────────────────────────────────────────────────────────────────────────────
+    @requires("receiver")
+    def _receive_frames(self):
+        frame_raw = self._receive_raw_frames()
+        frame = self.cv2_to_b64(frame_raw)
+        return 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    """
-    def __init__(self, n: int, port: int, topic: str):
-        zctx = zmq.Context.instance()
-        socket = zctx.socket(zmq.SUB)
-        socket.setsockopt(zmq.CONFLATE, 1)
-        socket.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
-        socket.connect(f"tcp://localhost:{port}")
-        self.socket = socket
-
-        try:
-            self.shm = shared_memory.SharedMemory(name=f"shared_image_{n}")
-            self.remove_shm_from_resource_tracker(self.shm.name) 
-        except FileNotFoundError:
-            self.shm = None
-
-        print("------------")
-        print("n; ", n)
-        print(self.shm)
-
-        self.n_device_id = n
-        self.started = False
-        self.skeleton = None
-        self.confidence = None
-        self.frame = None
-
-    def start(self):
-        self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.data_receiver, args=(self.n_device_id,))
-        if self.started:
-            return
-        self.started = True
-        self.thread.start()
-        return self
-
-    # Unregister shared_memory folder
-    def remove_shm_from_resource_tracker(self, name):
-        rt.unregister(f"/{name}", "shared_memory")
-
-    # Convert OpenCV image to base64 data URI
-    def cv2_to_b64(self, img):
-        is_success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        if not is_success: 
-            return None
-        encoded = base64.b64encode(buffer).decode("utf-8")
-        return "data:image/jpeg;base64," + encoded
-
-    def data_receiver(self, n: int):
-        while True:
-            x, _, msg1, msg2 = self.socket.recv_string().split("; ", 3)
-            skeleton = json.loads(msg1)
-            confidence = json.loads(msg2)
-            with self.mutex:
-                self.skeleton = skeleton
-                self.confidence = confidence
-
-            if not self.shm is None:
-                arr = np.ndarray((H, W, C), dtype=dtype, buffer=self.shm.buf)
-                img = arr.copy()
-                frame = self.cv2_to_b64(img)
-                with self.mutex:
-                    self.frame = frame
-
-    def read_skeleton(self):
-        with self.mutex:
-            skeleton = self.skeleton.copy() if self.skeleton is not None else None
-        return skeleton
-    
-    def read_confidence(self):
-        with self.mutex:
-            confidence = self.confidence.copy() if self.confidence is not None else None
-        return confidence
-    
-    def read_frame(self):
-        with self.mutex:
-            frame = self.frame if self.frame is not None else None
-        return frame
-    
-    def stop(self):
-        self.started = False
-        self.thread.join()
-        self.shm.close() 
-        self.socket.close()
-        return self
-        """
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Receive unpacked skeleton data via ZeroMQ
+    # ─────────────────────────────────────────────────────────────────────────────
+    @requires("receiver")
+    def _receive_skeleton_data(self):
+        skeleton_data_packed = self._receive_packed_skeleton_data()
+        _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 2)
+        skeleton = json.loads(skeleton_packed)
+        confidence = json.loads(confidence_packed)
+        return skeleton, confidence

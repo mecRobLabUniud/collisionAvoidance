@@ -23,6 +23,7 @@ import pyrealsense2 as rs
 from ultralytics import YOLO
 from multiprocessing import shared_memory
 from utils.skeleton_tracker import SkeletonTracker
+from utils.data_transmitter import DataTransmitter
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
@@ -51,10 +52,8 @@ def load_pose_matrix(path_txt):
 # Coordinates transformation
 # ─────────────────────────────────────────────────────────────────────────────
 def transform_points(T, pts_xyz):
-    # pts_h: punti omogenei (N,4), aggiungendo una colonna di 1 in coda
     pts_h = np.concatenate([pts_xyz, np.ones((pts_xyz.shape[0], 1))], axis=1)
-    # T: trasformazione omogenea (4,4), pts_h.T: (4,N) (la trasposta), @ è il prodotto matriciale riga per colonna
-    return (T @ pts_h.T).T[:, :3] # ritorna solo le prime 3 colonne (X,Y,Z) di tutte le righe
+    return (T @ pts_h.T).T[:, :3]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
