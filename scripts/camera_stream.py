@@ -14,24 +14,21 @@ The script supports multiple cameras and can save video output for debugging.
 
 import signal
 import os
-import cv2
 import numpy as np
-import zmq
-import time
-import json
+import logging
 import pyrealsense2 as rs
 from ultralytics import YOLO
-from multiprocessing import shared_memory
 from utils.skeleton_tracker import SkeletonTracker
 from utils.data_transmitter import DataTransmitter
+
+logging.getLogger('ultralytics').setLevel(logging.ERROR)
+logging.getLogger('tensorrt').setLevel(logging.ERROR)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
 W, H = 848, 480
 running = True
-out_port = 7000
-topic = "SKEL"
 save_video = False
 display_stream = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,7 +39,7 @@ yolo_model = "yolo26n-pose"
 # ─────────────────────────────────────────────────────────────────────────────
 # Load pose matrix
 # ─────────────────────────────────────────────────────────────────────────────
-def load_pose_matrix(path_txt):
+def load_rotation_matrix(path_txt):
     T = np.loadtxt(path_txt, dtype=np.float64)
     assert T.shape == (4, 4)
     return T
@@ -51,127 +48,96 @@ def load_pose_matrix(path_txt):
 # ─────────────────────────────────────────────────────────────────────────────
 # Coordinates transformation
 # ─────────────────────────────────────────────────────────────────────────────
-def transform_points(T, pts_xyz):
-    pts_h = np.concatenate([pts_xyz, np.ones((pts_xyz.shape[0], 1))], axis=1)
+def transform_points(T, pts_skeleton):
+    pts_h = np.concatenate([pts_skeleton, np.ones((pts_skeleton.shape[0], 1))], axis=1)
     return (T @ pts_h.T).T[:, :3]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Skeleton tracking
 # ─────────────────────────────────────────────────────────────────────────────
-def tracking(align, model, socket, video_writer):
-    # Devices initialization
-    ctx = rs.context()
-    devices = ctx.devices  # Query connected devices
-    trackers = []
-    shms = []
-    pose_matrixes = []
-    for i, device in enumerate(devices):
-        # Create trackers
-        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
-        trackers.append(tracker)
+def tracking(dtss, trackers, rotation_matrices):    
+    for n, (dts, tracker, rotation_matrix) in enumerate(zip(dtss, trackers, rotation_matrices)):
+        frame = tracker.read_frame()
+        skeleton, confidence = tracker.read_coords()            
 
-        frame = None
-        while frame is None:
-            frame = tracker.read_frame()
-        nbytes = frame.nbytes
-        shape = frame.shape
-        dtype = frame.dtype
+        # Write frame into shared memory
+        if not frame is None:
+            dts.send_frames(frame)
 
-        try:
-            # Create shared memory
-            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image_{i}")
-        except FileExistsError:
-            # If the shared memory block already exists, unlink it and create a new one
-            existing_shm = shared_memory.SharedMemory(name=f"shared_image_{i}")
-            existing_shm.close()
-            existing_shm.unlink()
-            shm = shared_memory.SharedMemory(create=True, size=nbytes, name=f"shared_image_{i}")
-        shms.append(shm)
+        # Write skeleton data into socket
+        if not skeleton is None and not confidence is None:
+            skeleton = transform_points(rotation_matrix, skeleton.astype(np.float64)).astype(np.float32)
+            confidence = confidence.astype(np.float32)        
 
-        serial = tracker.get_serial_number()
-        pose_matrix = load_pose_matrix(os.path.join(script_dir, f"calibration/pose_{serial}.txt"))
-        pose_matrixes.append(pose_matrix)
+            dts.send_skeleton_data(skeleton, confidence)
 
-        print(f"Device {i} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
-    print("Streaming started")
-    
-    # Data acquisition main loop
-    while running:
-        for n, (tracker, shm, pose_matrix) in enumerate(zip(trackers, shms, pose_matrixes)):
-            frame = tracker.read_frame()
-            xyz, conf = tracker.read_coords()            
-
-            # Write image data into shared memory
-            buf = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
-            buf[:] = frame[:]
-
-            # Trasformazione nel frame Base del Robot
-            if not xyz is None and not conf is None:
-                # Usa xyz_cam_s direttamente (frame ottico nativo RealSense) invece di xyz_cam_mapped
-                xyz_base = transform_points(pose_matrix, xyz.astype(np.float64)).astype(np.float32)
-                conf = conf.astype(np.float32)
-
-                # if n == 1:
-                #     xyz_base = np.full((17, 3), np.nan, dtype=np.float32)          
-
-                message = f"{topic}_{n}; {len(devices)}; {json.dumps(xyz_base.tolist())}; {json.dumps(conf.tolist())}"  # Still have to add conf
-                socket.send_string(message)
-
-            if not frame is None:
-                if display_stream:
-                    cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
-
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
-                # Video saving
-                if n == 0:
-                    if save_video and video_writer is not None:
-                        video_writer.write(frame)
-
-    for shm in shms:
-        shm.close()
-        shm.unlink()  # Delete the shared memory block
-    
-    # Wait for both to finish
-    for tracker in trackers:
-        tracker.stop()
-
-    # Resources cleanup
-    print("Chiusura pipeline e finestre...")
-    cv2.destroyAllWindows()
-    if video_writer is not None:
-        video_writer.release()
-    socket.close()
-    # ctx.term()
+        # if not frame is None:
+        #     if display_stream:
+        #         cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
+# 
+        #         if cv2.waitKey(1) & 0xFF == ord('q'):
+        #             break
+        #     # Video saving
+        #     if n == 0:
+        #         if save_video and video_writer is not None:
+        #             video_writer.write(frame)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():    
-    # pose_matrix = load_pose_matrix(os.path.join(script_dir, "../rotation_matrix.txt")) # Carica calibrazione camera-robot
+    ctx = rs.context()
+    devices = ctx.devices  # Query connected devices
     align = rs.align(rs.stream.color) # Allinea depth a color
     model = YOLO(os.path.join(script_dir, f"../models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
 
-    # Inizializzazione ZeroMQ (Publisher)
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.PUB)
-    socket.bind(f"tcp://*:{out_port}")
+    # # Inizializzazione VideoWriter
+    # video_writer = None
+    # if save_video:
+    #     video_writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (W, H))
 
-    # Inizializzazione VideoWriter
-    video_writer = None
-    if save_video:
-        video_writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (W, H))
+    dtss = []
+    trackers = []
+    rotation_matrices = []
+    for n, device in enumerate(devices):
+        # Inizializzazione sender
+        dts = DataTransmitter("sender", n, "SINGLE_CAMERA")
+        dtss.append(dts)
 
-    # Gestione segnali per chiusura pulita (es. CTRL+C o kill da script bash)
+        # Create trackers
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
+        trackers.append(tracker)
+
+        serial = tracker.get_serial_number()
+        rotation_matrix = load_rotation_matrix(os.path.join(script_dir, f"calibration/pose_{serial}.txt"))
+        rotation_matrices.append(rotation_matrix)
+
+        print(f"Device {n} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
+    print("Streaming started")
+
+    # Clear shutdown logic
     def signal_handler(sig, frame):
         global running
         running = False
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    tracking(align, model, socket, video_writer)
+    while running:
+        tracking(dtss, trackers, rotation_matrices)
+
+    for (dts, tracker) in zip(dtss, trackers):
+        dts.shutdown()
+        tracker.shutdown()
+
+    # # Resources cleanup
+    # print("Chiusura pipeline e finestre...")
+    # cv2.destroyAllWindows()
+    # if video_writer is not None:
+    #     video_writer.release()
+    # socket.close()
+    # # ctx.term()
     
 
 if __name__ == "__main__":

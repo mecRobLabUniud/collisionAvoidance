@@ -9,14 +9,15 @@
 import zmq
 import time
 import json
+import signal
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
-from utils.skeleton_receiver import SkeletonReceiver
+from utils.data_transmitter import DataTransmitter
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
-in_port = 6000
-out_port = 7000
+port = 6000
+running = True
 topic = "SKEL"
 interfaces = None
 n_devices = 0
@@ -27,10 +28,11 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # ─────────────────────────────────────────────────────────────────────────────
 # Merging
 # ─────────────────────────────────────────────────────────────────────────────
-def merging(interfaces, socket):
+def merging(dtrs, dtss):
     t0 = time.time()
-    skeletons = [interface.read_skeleton() for interface in interfaces]
-    confidences = [interface.read_confidence() for interface in interfaces]
+
+    skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
+    confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
 
     fused_skels = []
     for i in range(skel_len):
@@ -38,12 +40,14 @@ def merging(interfaces, socket):
         conf = [confidence[i] for confidence in confidences if not confidence==None]
         fused_skels.append(kfs[i].step(skel, conf).tolist())
 
+
+    print(fused_skels)
     # payload = (skeleton, confidence)
     # message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
     # socket.send_string(message)
     
-    message = f"MERGE_0; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
-    socket.send_string(message)
+    # message = f"MERGE_0; {n_devices}; {json.dumps(fused_skels)}; {json.dumps(None)}"
+    # socket.send_string(message)
 
     print(f"\rLoop time: {time.time()-t0}", end="")
     time.sleep(0.2)
@@ -53,24 +57,23 @@ def merging(interfaces, socket):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global n_devices
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-    socket.connect(f"tcp://localhost:{in_port}")
-    _, n_devices, _ = socket.recv_string().split("; ", 2)
-    socket.close()
-
-    interfaces = [SkeletonReceiver(n, in_port, "SKEL").start() for n in range(int(n_devices))]
-
-    # Inizializzazione ZeroMQ (Publisher)
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.PUB)
-    socket.bind(f"tcp://*:{out_port}")
-
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
+    # dtss = [DataTransmitter("sender", n, "MERGED", port=7000) for n in range(2)]
+    dtss = None
     print("Merging started correctly\n")
-    while True:
-        merging(interfaces, socket)
+    
+        # Clear shutdown logic
+    def signal_handler(sig, frame):
+        global running
+        running = False
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    while running:
+        merging(dtrs, dtss)
+
+    # for dtr in dtrs:
+    #     dtr.shutdown()
         
 
 if __name__ == "__main__":

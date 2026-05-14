@@ -23,6 +23,9 @@ from utils.filters import Keypoints3DSmoother
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters
+# ─────────────────────────────────────────────────────────────────────────────
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
@@ -31,17 +34,14 @@ COCO_SKELETON = [
     (11, 13), (13, 15), (12, 14), (14, 16)
 ]
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
-
-# Parameters
-
-
 conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1.0)
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
 
 
-
-# Function for RealSense pipeline initialization 
+# ─────────────────────────────────────────────────────────────────────────────
+# RealSense pipeline initialization 
+# ─────────────────────────────────────────────────────────────────────────────
 def camera_streaming(serial, w_camera, h_camera, camera_rate, depth):
     pipe = rs.pipeline()
     cfg = rs.config()
@@ -53,8 +53,9 @@ def camera_streaming(serial, w_camera, h_camera, camera_rate, depth):
     return pipe
 
 
-
-# Function to robustly read depth around a pixel (u,v) using a median filter in a neighborhood, with max distance thresholding
+# ─────────────────────────────────────────────────────────────────────────────
+# Robust depth reading around a pixel 
+# ─────────────────────────────────────────────────────────────────────────────
 def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
     w, h = depth_frame.get_width(), depth_frame.get_height()
     uu, vv = int(round(u)), int(round(v)) # pixel centrali, round() arrotonda al più vicino intero
@@ -78,18 +79,30 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
     return zs[len(zs) // 2]
 
 
-
-# Class for tracking skeletons from RealSense camera, applying YOLOv8-Pose for keypoint detection, and using Keypoints3DSmoother for temporal smoothing and occlusion handling
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton tracker using YOLOv8-Pose for keypoint detection
+# ─────────────────────────────────────────────────────────────────────────────
 class SkeletonTracker:
-    def __init__(self, device, w_camera=848, h_camera=480, camera_rate=60, depth=True):
+    def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True):
         self.device = device
         self.pipe = camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
         self.frame = None
+        self.thread = None
         self.started = False
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
+
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Default destructor
+    # ─────────────────────────────────────────────────────────────────────────────
+    def __del__(self):
+        try:
+            self.shutdown()
+        except:
+            pass
 
 
     def start(self, align, model):
@@ -233,7 +246,7 @@ class SkeletonTracker:
         return xyz, conf
 
 
-    def stop(self):
+    def shutdown(self):
+        #if not self.thread is None:
         self.started = False
         self.thread.join()
-        # self.pipe.release()

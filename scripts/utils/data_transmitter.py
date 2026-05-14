@@ -32,7 +32,7 @@ def requires(mode):
     def decorator(func):
         def wrapper(self, *args, **kwargs):
             if self.mode == mode:
-                func(self, *args, **kwargs)
+                return func(self, *args, **kwargs)
             else: 
                 raise AttributeError(f"'{func.__name__}' method is not enabled")
         return wrapper
@@ -43,10 +43,10 @@ def requires(mode):
 # Data transmitter
 # ─────────────────────────────────────────────────────────────────────────────
 class DataTransmitter:
-    def __init__(self, mode: str, device_id: int, port: int, topic: str):
+    def __init__(self, mode: str, device_id: int, topic: str, port: int=6000):
         self.mode = mode
         self.device_id = device_id
-        self.port = port
+        self.port = port+device_id
         self.topic = topic
         self.nbytes = H*W*C
         self.socket = None
@@ -68,15 +68,28 @@ class DataTransmitter:
             self.receive_skeleton_data = self._receive_skeleton_data
         else:
             raise ValueError(f"Unknown argument: {self.mode}")
+        
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Default destructor
+    # ─────────────────────────────────────────────────────────────────────────────
+    def __del__(self):
+        try:
+            self.shutdown()
+        except:
+            pass
     
 
     # ─────────────────────────────────────────────────────────────────────────────
     # ZeroMQ setup for outgoing data
     # ─────────────────────────────────────────────────────────────────────────────
     def setup_zmq_sender(self):
-        socket = zmq.Context.instance().socket(zmq.PUB)
-        socket.bind(f"tcp://*:{self.port}")
-        self.socket = socket
+        try:
+            socket = zmq.Context.instance().socket(zmq.PUB)
+            socket.bind(f"tcp://*:{self.port}")
+            self.socket = socket
+        except:
+            pass
 
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +106,15 @@ class DataTransmitter:
             shm = shared_memory.SharedMemory(create=True, size=self.nbytes, name=f"shared_image{self.device_id}")
         self.shm = shm
 
+
+    # Convert OpenCV image to base64 data URI
+    def cv2_to_b64(self, img):
+        is_success, buffer = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        if not is_success: 
+            return None
+        encoded = base64.b64encode(buffer).decode("utf-8")
+        return "data:image/jpeg;base64," + encoded
+    
 
     # ─────────────────────────────────────────────────────────────────────────────
     # ZeroMQ setup for incoming data
@@ -139,7 +161,8 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     @requires("receiver")
     def _receive_raw_frames(self):
-        return np.ndarray((H, W, C), dtype=np.uint8, buffer=self.shm.buf).copy()
+        frame = np.ndarray((H, W, C), dtype=np.uint8, buffer=self.shm.buf).copy()
+        return frame
 
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -155,9 +178,11 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     @requires("receiver")
     def _receive_frames(self):
-        frame_raw = self._receive_raw_frames()
+        # print(self.shm.name)
+        frame_raw = self.receive_raw_frames()
+        # print(frame_raw)
         frame = self.cv2_to_b64(frame_raw)
-        return 
+        return frame
 
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -165,8 +190,23 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     @requires("receiver")
     def _receive_skeleton_data(self):
-        skeleton_data_packed = self._receive_packed_skeleton_data()
+        skeleton_data_packed = self.receive_packed_skeleton_data()
         _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 2)
         skeleton = json.loads(skeleton_packed)
         confidence = json.loads(confidence_packed)
         return skeleton, confidence
+    
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Close shm and socket
+    # ─────────────────────────────────────────────────────────────────────────────
+    def shutdown(self):
+        if not self.socket is None:
+            self.socket.close()
+        # if not self.shm is None:
+        #     rt.unregister(f"/{self.shm.name}", "shared_memory")
+        #     self.shm.close()
+        #     self.shm.unlink() 
+
+
+    
