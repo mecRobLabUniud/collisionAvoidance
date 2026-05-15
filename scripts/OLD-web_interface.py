@@ -73,6 +73,8 @@ def update_bar_chart(n_intervals):
 
     frames = [dtr.receive_frames() for dtr in dtrs]
 
+    print(skeletons)
+
     fused_skels = []
     for i in range(skel_len):
         skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]

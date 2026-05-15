@@ -29,7 +29,7 @@ logging.getLogger('tensorrt').setLevel(logging.ERROR)
 # ─────────────────────────────────────────────────────────────────────────────
 W, H = 848, 480
 running = True
-save_video = False
+save_data = True
 display_stream = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
@@ -64,7 +64,7 @@ def tracking(dtss, trackers, rotation_matrices):
         # Write frame into shared memory
         if not frame is None:
             dts.send_frames(frame)
-
+        
         # Write skeleton data into socket
         if not skeleton is None and not confidence is None:
             skeleton = transform_points(rotation_matrix, skeleton.astype(np.float64)).astype(np.float32)
@@ -80,17 +80,17 @@ def main():
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
     model = YOLO(os.path.join(script_dir, f"../models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
-
     dtss = []
     trackers = []
     rotation_matrices = []
+    data_writers = []
     for n, device in enumerate(devices):
         # Inizializzazione sender
         dts = DataTransmitter("sender", n, "SINGLE_CAMERA")
         dtss.append(dts)
 
         # Create trackers
-        tracker = SkeletonTracker("stream", device.get_info(rs.camera_info.serial_number)).start(model)
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), save=save_data).start(model)
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()

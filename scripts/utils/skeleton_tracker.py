@@ -75,8 +75,7 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
 # Skeleton tracker using YOLOv8-Pose for keypoint detection
 # ─────────────────────────────────────────────────────────────────────────────
 class SkeletonTracker:
-    def __init__(self, mode, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True):
-        self.mode = mode
+    def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True, save: bool=False):
         self.device = device
         self.align = rs.align(rs.stream.color) # Allinea depth a color
         self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
@@ -90,6 +89,7 @@ class SkeletonTracker:
         self.conf_thr = conf_thr
         self.conf = None
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
+        self.save_data = save
         
 
 
@@ -122,22 +122,17 @@ class SkeletonTracker:
         if self.started:
             return
         self.started = True
-        if self.mode == "stream":
-            self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
-            self.camera_thread.start()
-        if self.mode == "read":
-            self.reader_thread = threading.Thread(target=self.video_reader, args=())
-            self.reader_thread.start()
+        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
         self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
-        
-        
+        self.camera_thread.start()
         self.model_thread.start()
         return self
     
 
     def camera_streaming(self):
-        self.color_writer = VideoRecorder(f"media/color_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
-        self.depth_writer = VideoRecorder(f"media/depth_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
+        if self.save_data:
+            self.color_writer = VideoRecorder(f"media/color_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
+            self.depth_writer = VideoRecorder(f"media/depth_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
 
         last_frame_number = -1
         while running and self.started:
@@ -155,57 +150,25 @@ class SkeletonTracker:
             last_frame_number = frame_number
 
             self.W, self.H = depth.get_width(), depth.get_height()
-
-            color_np = np.asanyarray(color.get_data())
-            depth_np = np.asanyarray(depth.get_data())
-
+            self.intr = depth.profile.as_video_stream_profile().intrinsics
             with self.mutex:
                 self.color = color
                 self.depth = depth
 
-            
-            depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
+            if self.save_data:
+                color_np = np.asanyarray(color.get_data())
+                depth_np = np.asanyarray(depth.get_data())
+                depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
 
-            self.color_writer.write(color_np)
-            self.depth_writer.write(depth_colormap)
-
-
-    def video_reader(self):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        print(script_dir)
-        self.color_cap = cv2.VideoCapture(f"{script_dir}/../../media/color_{self.device}.avi")
-        self.depth_cap = cv2.VideoCapture(f"{script_dir}/../../media/depth_{self.device}.avi")
-
-        while True:
-            ret_c, color = self.color_cap.read()
-            ret_d, depth = self.depth_cap.read()
-
-            print(ret_c)
-
-            with self.mutex:
-                self.color = color
-                self.depth = depth
-
-            if not ret_c or not ret_d:
-                break  # end of one of the files
-
-            time.sleep(0.016)
-
-            # # color_frame is BGR, ready to use
-            # cv2.imshow("Color", color)
-# 
-            # # depth_frame is the JET colormap — convert back to grayscale if needed
-            # depth_gray = cv2.cvtColor(depth, cv2.COLOR_BGR2GRAY)
-            # cv2.imshow("Depth", depth_gray)
-# 
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
-
+                self.color_writer.write(color_np)
+                self.depth_writer.write(depth_colormap)
 
 
     def skeleton_tracking(self, model):
-        global running
+        if self.save_data:
+            self.frame_writer = VideoRecorder(f"media/tracked_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
+
         while running and self.started:
             if not self.depth or not self.color:
                 continue
@@ -225,7 +188,7 @@ class SkeletonTracker:
                 conf = person[:, 2]
 
                 # Intrinseci della camera per la deproiezione
-                intr = depth.profile.as_video_stream_profile().intrinsics
+                
 
                 # Estrazione coordinate 3D nel frame Camera
                 xyz_cam = np.full((17, 3), np.nan, dtype=np.float32)
@@ -244,7 +207,7 @@ class SkeletonTracker:
                     if not math.isfinite(z):
                         continue
                     # Deproiezione: da pixel 2D + depth, a punto 3D (metri)
-                    X, Y, Z = rs.rs2_deproject_pixel_to_point(intr, [u, v], z)
+                    X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
                     xyz_cam[k] = np.array([X, Y, Z], dtype=np.float32)
 
                 # Filtraggio temporale (OneEuroFilter)
@@ -265,6 +228,9 @@ class SkeletonTracker:
 
             with self.mutex:
                 self.frame = color_img
+
+            if self.save_data:
+                self.frame_writer.write(color_img)
 
 
     def get_aligned_frames(self):
@@ -333,15 +299,12 @@ class SkeletonTracker:
     def shutdown(self):
         #if not self.thread is None:
         self.started = False
-        if self.mode == "stream":
-            self.camera_thread.join()
+        self.camera_thread.join()
+        self.model_thread.join()
+        if self.save_data:            
             self.color_writer.release()
             self.depth_writer.release()
-        if self.mode == "read":
-            self.reader_thread.join()
-            self.color_cap.release()
-            self.depth_cap.release()
-        self.model_thread.join()
+            self.frame_writer.release()
 
         
 

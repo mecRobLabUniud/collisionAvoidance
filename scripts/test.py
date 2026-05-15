@@ -6,8 +6,9 @@ import cv2
 
 out_port = 6000
 
+print("=========================")
+
 while True:
-    print("=========================")
     for n in range(2):
         dt = DataTransmitter("receiver", n, "SINGLE_CAMERA")
         
@@ -23,4 +24,4 @@ while True:
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    time.sleep(0.5)
+    time.sleep(0.01)
