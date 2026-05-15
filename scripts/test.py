@@ -15,6 +15,11 @@ while True:
 
         # color_frame is BGR, ready to use
         cv2.imshow(f"Color {n}", color_frame)
+
+        # # depth_frame is the JET colormap — convert back to grayscale if needed
+        # depth_gray = cv2.cvtColor(depth, cv2.COLOR_BGR2GRAY)
+        # cv2.imshow("Depth", depth_gray)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 

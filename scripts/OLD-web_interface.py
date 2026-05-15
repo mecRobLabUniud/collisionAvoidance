@@ -22,6 +22,7 @@ from dash import Dash, dcc, html, Input, Output
 from statistics import mean
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.skeleton_receiver import SkeletonReceiver
+from utils.data_transmitter import DataTransmitter
 from copy import deepcopy
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
@@ -45,7 +46,7 @@ camera2 = dict(up=dict(x=0, y=0, z=1),
         eye=dict(x=2, y=0, z=0.5))
 data = None
 pic = None
-interfaces = None
+dtrs = None
 skel_len = 17
 H, W, C = 480, 848, 3 
 dtype = np.uint8
@@ -67,8 +68,16 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     global ret_prev
-    skeletons = [interface.read_skeleton() for interface in interfaces]
-    frames = [interface.read_frame() for interface in interfaces]
+    skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
+    confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
+
+    frames = [dtr.receive_frames() for dtr in dtrs]
+
+    fused_skels = []
+    for i in range(skel_len):
+        skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
+        conf = [confidence[i] for confidence in confidences if not confidence==None]
+        fused_skels.append(kfs[i].step(skel, conf).tolist())
 
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
@@ -126,7 +135,7 @@ def update_bar_chart(n_intervals):
 
 # Main loop to receive data via ZeroMQ and shared_memory and update the plot
 def main():
-    global interfaces
+    global dtrs
     app.layout = html.Div([
                     html.H1('Skeleton tracking 3D scatter'),
                     html.Div([
@@ -146,26 +155,20 @@ def main():
                 id = "change-height", 
                 style={"display": "inline-block", "width": "100%", "height": "100%"})
     
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-    socket.connect(f"tcp://localhost:{in_port}")
-    _, n_devices, _ = socket.recv_string().split("; ", 2)
-    socket.close()
+    # zctx = zmq.Context.instance()
+    # socket = zctx.socket(zmq.SUB)
+    # socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    # socket.connect(f"tcp://localhost:{in_port}")
+    # _, n_devices, _ = socket.recv_string().split("; ", 2)
+    # socket.close()
 
-    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
-
-    skeleton = interfaces[0].read_skeleton() 
-
-    while True:
-        print(skeleton)
+    # interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
 
 
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
 
-    for interface in interfaces:
-        interface.stop()
         
 
 # Entry point

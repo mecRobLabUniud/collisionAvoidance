@@ -90,8 +90,7 @@ def main():
         dtss.append(dts)
 
         # Create trackers
-        #tracker = SkeletonTracker("streaming", device.get_info(rs.camera_info.serial_number)).start(model)
-        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(model)
+        tracker = SkeletonTracker("stream", device.get_info(rs.camera_info.serial_number)).start(model)
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()
