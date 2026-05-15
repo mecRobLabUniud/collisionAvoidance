@@ -40,6 +40,7 @@ conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
 
+
 # color_writer = cv2.VideoWriter("color.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480))
 # depth_writer = cv2.VideoWriter("depth.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480), isColor=True)
 
@@ -91,7 +92,6 @@ class SkeletonTracker:
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
         self.save_data = save
         
-
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Default destructor
