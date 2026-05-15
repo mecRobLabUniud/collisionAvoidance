@@ -59,7 +59,7 @@ def transform_points(T, pts_skeleton):
 def tracking(dtss, trackers, rotation_matrices):    
     for n, (dts, tracker, rotation_matrix) in enumerate(zip(dtss, trackers, rotation_matrices)):
         frame = tracker.read_frame()
-        skeleton, confidence = tracker.read_coords()            
+        skeleton, confidence = tracker.read_coords()      
 
         # Write frame into shared memory
         if not frame is None:
@@ -71,17 +71,6 @@ def tracking(dtss, trackers, rotation_matrices):
             confidence = confidence.astype(np.float32)        
 
             dts.send_skeleton_data(skeleton, confidence)
-
-        # if not frame is None:
-        #     if display_stream:
-        #         cv2.imshow(f"YOLO Skeleton Realtime Camera {n}", frame)
-# 
-        #         if cv2.waitKey(1) & 0xFF == ord('q'):
-        #             break
-        #     # Video saving
-        #     if n == 0:
-        #         if save_video and video_writer is not None:
-        #             video_writer.write(frame)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +90,7 @@ def main():
         dtss.append(dts)
 
         # Create trackers
+        #tracker = SkeletonTracker("streaming", device.get_info(rs.camera_info.serial_number)).start(model)
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(model)
         trackers.append(tracker)
 
@@ -124,14 +114,6 @@ def main():
     for (dts, tracker) in zip(dtss, trackers):
         dts.shutdown()
         tracker.shutdown()
-
-    # # Resources cleanup
-    # print("Chiusura pipeline e finestre...")
-    # cv2.destroyAllWindows()
-    # if video_writer is not None:
-    #     video_writer.release()
-    # socket.close()
-    # # ctx.term()
     
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ import pyrealsense2 as rs
 import threading
 import logging
 from utils.filters import Keypoints3DSmoother
+from utils.video_recorder import VideoRecorder
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -38,19 +39,9 @@ conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
 
+# color_writer = cv2.VideoWriter("color.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480))
+# depth_writer = cv2.VideoWriter("depth.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480), isColor=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RealSense pipeline initialization 
-# ─────────────────────────────────────────────────────────────────────────────
-def camera_streaming(serial, w_camera, h_camera, camera_rate, depth):
-    pipe = rs.pipeline()
-    cfg = rs.config()
-    cfg.enable_device(serial)
-    if depth:
-        cfg.enable_stream(rs.stream.depth, w_camera, h_camera, rs.format.z16, camera_rate)
-    cfg.enable_stream(rs.stream.color, w_camera, h_camera, rs.format.bgr8, camera_rate)
-    pipe.start(cfg)
-    return pipe
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,14 +77,19 @@ class SkeletonTracker:
     def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True):
         self.device = device
         self.align = rs.align(rs.stream.color) # Allinea depth a color
-        self.pipe = camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
+        self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
+        self.color = None
+        self.depth = None
         self.frame = None
-        self.thread = None
+        self.camera_thread = None
+        self.model_thread = None
         self.started = False
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
+        self.color_writer = VideoRecorder(f"media/color_{device}.avi", "XVID", 60, (848, 480), is_color=True)
+        self.depth_writer = VideoRecorder(f"media/depth_{device}.avi", "XVID", 60, (848, 480), is_color=True)
 
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -106,30 +102,73 @@ class SkeletonTracker:
             pass
 
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # RealSense pipeline initialization 
+    # ─────────────────────────────────────────────────────────────────────────────
+    def setup_camera_streaming(self, serial, w_camera, h_camera, camera_rate, depth):
+        pipe = rs.pipeline()
+        cfg = rs.config()
+        cfg.enable_device(serial)
+        if depth:
+            cfg.enable_stream(rs.stream.depth, w_camera, h_camera, rs.format.z16, camera_rate)
+        cfg.enable_stream(rs.stream.color, w_camera, h_camera, rs.format.bgr8, camera_rate)
+        pipe.start(cfg)
+        return pipe
+
+
     def start(self, model):
         self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
+        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
+        self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
         if self.started:
             return
         self.started = True
-        self.thread.start()
+        self.camera_thread.start()
+        self.model_thread.start()
         return self
     
+
+    def camera_streaming(self):
+        last_frame_number = -1
+        while running and self.started:
+            fs = self.pipe.wait_for_frames()
+            fs = self.align.process(fs)
+            depth = fs.get_depth_frame()
+            color = fs.get_color_frame()
+
+            if not depth or not color:
+                continue
+
+            frame_number = color.get_frame_number()
+            if frame_number == last_frame_number:
+                continue
+            last_frame_number = frame_number
+
+            self.W, self.H = depth.get_width(), depth.get_height()
+
+            with self.mutex:
+                self.color = color
+                self.depth = depth
+
+            color_np = np.asanyarray(color.get_data())
+            depth_np = np.asanyarray(depth.get_data())
+            depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
+
+            self.color_writer.write(color_np)
+            self.depth_writer.write(depth_colormap)
+
+
 
     def skeleton_tracking(self, model):
         global running
         while running and self.started:
-            t0 = time.time()
-            
-            # Acquisizione frame (fs)
-            fs = self.pipe.wait_for_frames()
-            fs = self.align.process(fs) # Allineamento fondamentale per far corrispondere pixel RGB a Depth
-            depth = fs.get_depth_frame()
-            color = fs.get_color_frame()
-            W, H = depth.get_width(), depth.get_height()
-
-            if not depth or not color:
+            if not self.depth or not self.color:
                 continue
+            else:
+                with self.mutex:
+                    color = self.color
+                    depth = self.depth
 
             # Inferenza rete neurale
             color_img = np.asanyarray(color.get_data())
@@ -153,7 +192,7 @@ class SkeletonTracker:
                     
                     # MODIFICA: Scarta keypoint troppo vicini ai bordi dell'immagine (lente distorta / parzialmente fuori)
                     margin = 15
-                    if u < margin or u > W - margin or v < margin or v > H - margin:
+                    if u < margin or u > self.W - margin or v < margin or v > self.H - margin:
                         continue
 
                     # Lettura robusta della profondità (con max_dist e R aumentato)
@@ -250,4 +289,8 @@ class SkeletonTracker:
     def shutdown(self):
         #if not self.thread is None:
         self.started = False
-        self.thread.join()
+        self.camera_thread.join()
+        self.model_thread.join()
+
+        self.color_writer.release()
+        self.depth_writer.release()

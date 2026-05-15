@@ -2,6 +2,7 @@
 
 from utils.data_transmitter import DataTransmitter
 import time
+import cv2
 
 out_port = 6000
 
@@ -10,6 +11,11 @@ while True:
     for n in range(2):
         dt = DataTransmitter("receiver", n, "SINGLE_CAMERA")
         
-        print(dt.receive_packed_skeleton_data())
+        color_frame = dt.receive_raw_frames()
+
+        # color_frame is BGR, ready to use
+        cv2.imshow(f"Color {n}", color_frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
     time.sleep(0.5)

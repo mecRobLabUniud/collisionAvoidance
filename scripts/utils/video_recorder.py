@@ -1,33 +1,32 @@
+import queue
 import cv2
+import threading
 
-video_filename = ~/Desktop/collision_avoidance
+# ─────────────────────────────────────────────────────────────────────────────
+# Thread-safe video writer using a dedicated writer thread + queue
+# ─────────────────────────────────────────────────────────────────────────────
+class VideoRecorder:
+    def __init__(self, path, fourcc, fps, size, is_color=True):
+        self.writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*fourcc), fps, size, isColor=is_color)
+        self.q = queue.Queue(maxsize=120)  # buffer up to 2 seconds at 60fps
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
 
+    def _worker(self):
+        while True:
+            frame = self.q.get()
+            if frame is None:  # poison pill → stop
+                break
+            self.writer.write(frame)
+            self.q.task_done()
 
-def class VideoRecorder():
-    def __init__(self):
-        self.cap = cv2.VideoCapture("video.mp4")  # or use 0 for webcam
-        self.writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (W, H))
+    def write(self, frame):
+        try:
+            self.q.put_nowait(frame.copy())  # .copy() avoids mutation races
+        except queue.Full:
+            pass  # drop frame if buffer is full rather than blocking
 
-"""while cap.isOpened():
-    ret, frame = cap.read()  # ret = True if frame was read successfully
-    
-    if not ret:
-        break  # End of video
-    
-    # `frame` is a NumPy array (H, W, 3) in BGR format
-    cv2.imshow("Frame", frame)
-    
-    if cv2.waitKey(25) & 0xFF == ord("q"):  # Press Q to quit
-        break
-
-cap.release()
-cv2.destroyAllWindows()"""
-
-
-
-
-
-# # Inizializzazione VideoWriter
-    # video_writer = None
-    # if save_video:
-    #     
+    def release(self):
+        self.q.put(None)       # send poison pill
+        self.thread.join()
+        self.writer.release()
