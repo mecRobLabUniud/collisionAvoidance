@@ -85,6 +85,7 @@ def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
 class SkeletonTracker:
     def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True):
         self.device = device
+        self.align = rs.align(rs.stream.color) # Allinea depth a color
         self.pipe = camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
         self.frame = None
         self.thread = None
@@ -105,9 +106,9 @@ class SkeletonTracker:
             pass
 
 
-    def start(self, align, model):
+    def start(self, model):
         self.mutex = threading.Lock()
-        self.thread = threading.Thread(target=self.skeleton_tracking, args=(align, model))
+        self.thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
         if self.started:
             return
         self.started = True
@@ -115,17 +116,17 @@ class SkeletonTracker:
         return self
     
 
-    def skeleton_tracking(self, align, model):
+    def skeleton_tracking(self, model):
         global running
         while running and self.started:
             t0 = time.time()
             
             # Acquisizione frame (fs)
             fs = self.pipe.wait_for_frames()
-            fs = align.process(fs) # Allineamento fondamentale per far corrispondere pixel RGB a Depth
+            fs = self.align.process(fs) # Allineamento fondamentale per far corrispondere pixel RGB a Depth
             depth = fs.get_depth_frame()
             color = fs.get_color_frame()
-            w_img, h_img = depth.get_width(), depth.get_height()
+            W, H = depth.get_width(), depth.get_height()
 
             if not depth or not color:
                 continue
@@ -152,7 +153,7 @@ class SkeletonTracker:
                     
                     # MODIFICA: Scarta keypoint troppo vicini ai bordi dell'immagine (lente distorta / parzialmente fuori)
                     margin = 15
-                    if u < margin or u > w_img - margin or v < margin or v > h_img - margin:
+                    if u < margin or u > W - margin or v < margin or v > H - margin:
                         continue
 
                     # Lettura robusta della profondità (con max_dist e R aumentato)
@@ -183,12 +184,12 @@ class SkeletonTracker:
                 self.frame = color_img
 
 
-    def get_aligned_frames(self, align):
+    def get_aligned_frames(self):
         depth = None
         color = None
         while depth is None and color is None:
             fs = self.pipe.wait_for_frames()
-            fs = align.process(fs)
+            fs = self.align.process(fs)
             depth = fs.get_depth_frame()
             color = fs.get_color_frame()
 

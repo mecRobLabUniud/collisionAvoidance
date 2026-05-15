@@ -87,16 +87,10 @@ def tracking(dtss, trackers, rotation_matrices):
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
-def main():    
+def main():
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
-    align = rs.align(rs.stream.color) # Allinea depth a color
     model = YOLO(os.path.join(script_dir, f"../models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
-
-    # # Inizializzazione VideoWriter
-    # video_writer = None
-    # if save_video:
-    #     video_writer = cv2.VideoWriter(video_filename, cv2.VideoWriter_fourcc(*'XVID'), 70, (W, H))
 
     dtss = []
     trackers = []
@@ -107,7 +101,7 @@ def main():
         dtss.append(dts)
 
         # Create trackers
-        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(align, model)
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number)).start(model)
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()
