@@ -68,33 +68,31 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     global ret_prev
-    skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
-    confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
+    merged_skeleton = [dtr.receive_skeleton_data()[0] for dtr in dtrs[-1]]
+    # confidence = [dtr.receive_skeleton_data()[1] for dtr in dtrs[-1]]
 
-    frames = [dtr.receive_frames() for dtr in dtrs]
+    frames = [dtr.receive_frames() for dtr in dtrs[:-1]]
 
-    print(skeletons)
-
-    fused_skels = []
-    for i in range(skel_len):
-        skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
-        conf = [confidence[i] for confidence in confidences if not confidence==None]
-        fused_skels.append(kfs[i].step(skel, conf).tolist())
+    # fused_skels = []
+    # for i in range(skel_len):
+    #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
+    #     conf = [confidence[i] for confidence in confidences if not confidence==None]
+    #     fused_skels.append(kfs[i].step(skel, conf).tolist())
 
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
     # print("\n================================\n")
 
-    fused_skels = skeletons[0]
+    # fused_skels = skeletons[0]
     # for i in range(skel_len):
     #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
     #     conf = [confidence[i] for confidence in confidences]
     #     # print(f"Keypoint {i}: {[c for c in conf]}")
     #     fused_skels.append(kfs[i].step(skel, conf))
 
-    x = [pnt[0] for pnt in fused_skels]
-    y = [pnt[1] for pnt in fused_skels]
-    z = [pnt[2] for pnt in fused_skels]
+    x = [pnt[0] for pnt in merged_skeleton]
+    y = [pnt[1] for pnt in merged_skeleton]
+    z = [pnt[2] for pnt in merged_skeleton]
     for (a, b) in EDGES:
         fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
                           marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt), opacity=0.8)
@@ -166,7 +164,7 @@ def main():
 
     # interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
-
+    dtrs.append(DataTransmitter("receiver", 0, "MERGED", port=7000))
 
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
