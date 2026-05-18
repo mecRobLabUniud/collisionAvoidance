@@ -20,7 +20,6 @@ import pyrealsense2 as rs
 import threading
 import logging
 from utils.filters import Keypoints3DSmoother
-from utils.video_recorder import VideoRecorder
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -43,33 +42,6 @@ running = True
 
 # color_writer = cv2.VideoWriter("color.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480))
 # depth_writer = cv2.VideoWriter("depth.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480), isColor=True)
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Robust depth reading around a pixel 
-# ─────────────────────────────────────────────────────────────────────────────
-def robust_depth_median(depth_frame, u, v, R=6, max_dist=3.0):
-    w, h = depth_frame.get_width(), depth_frame.get_height()
-    uu, vv = int(round(u)), int(round(v)) # pixel centrali, round() arrotonda al più vicino intero
-    zs = []
-    # Aumentato R da 4 a 6 per avere più campioni su cui fare la mediana
-    for dy in range(-R, R + 1):
-        y = vv + dy
-        if y < 0 or y >= h:
-            continue
-        for dx in range(-R, R + 1):
-            x = uu + dx
-            if x < 0 or x >= w:
-                continue
-            z = depth_frame.get_distance(x, y)  # metri (classe.metodo() di pyrealsense2)
-            # Filtra valori zero (invalidi) e valori troppo lontani (rumorosi)
-            if z > 0.05 and z <= max_dist and math.isfinite(z):
-                zs.append(z)
-    if not zs:
-        return float("nan")
-    zs.sort()
-    return zs[len(zs) // 2]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,10 +102,6 @@ class SkeletonTracker:
     
 
     def camera_streaming(self):
-        if self.save_data:
-            self.color_writer = VideoRecorder(f"media/color_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
-            self.depth_writer = VideoRecorder(f"media/depth_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
-
         last_frame_number = -1
         while running and self.started:
             fs = self.pipe.wait_for_frames()
@@ -155,19 +123,19 @@ class SkeletonTracker:
                 self.color = color
                 self.depth = depth
 
-            if self.save_data:
-                color_np = np.asanyarray(color.get_data())
-                depth_np = np.asanyarray(depth.get_data())
-                depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
-
-                self.color_writer.write(color_np)
-                self.depth_writer.write(depth_colormap)
+            # if self.save_data:
+            #     color_np = np.asanyarray(color.get_data())
+            #     depth_np = np.asanyarray(depth.get_data())
+            #     depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            #     depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
+# 
+            #     self.color_writer.write(color_np)
+            #     self.depth_writer.write(depth_colormap)
 
 
     def skeleton_tracking(self, model):
-        if self.save_data:
-            self.frame_writer = VideoRecorder(f"media/tracked_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
+        # if self.save_data:
+        #     self.frame_writer = VideoRecorder(f"media/tracked_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
 
         while running and self.started:
             if not self.depth or not self.color:
@@ -203,7 +171,7 @@ class SkeletonTracker:
                         continue
 
                     # Lettura robusta della profondità (con max_dist e R aumentato)
-                    z = robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
+                    z = self.robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
                     if not math.isfinite(z):
                         continue
                     # Deproiezione: da pixel 2D + depth, a punto 3D (metri)
@@ -229,8 +197,34 @@ class SkeletonTracker:
             with self.mutex:
                 self.frame = color_img
 
-            if self.save_data:
-                self.frame_writer.write(color_img)
+            # if self.save_data:
+            #     self.frame_writer.write(color_img)
+
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Robust depth reading around a pixel 
+    # ─────────────────────────────────────────────────────────────────────────────
+    def robust_depth_median(self, depth_frame, u, v, R=6, max_dist=3.0):
+        w, h = depth_frame.get_width(), depth_frame.get_height()
+        uu, vv = int(round(u)), int(round(v)) # pixel centrali, round() arrotonda al più vicino intero
+        zs = []
+        # Aumentato R da 4 a 6 per avere più campioni su cui fare la mediana
+        for dy in range(-R, R + 1):
+            y = vv + dy
+            if y < 0 or y >= h:
+                continue
+            for dx in range(-R, R + 1):
+                x = uu + dx
+                if x < 0 or x >= w:
+                    continue
+                z = depth_frame.get_distance(x, y)  # metri (classe.metodo() di pyrealsense2)
+                # Filtra valori zero (invalidi) e valori troppo lontani (rumorosi)
+                if z > 0.05 and z <= max_dist and math.isfinite(z):
+                    zs.append(z)
+        if not zs:
+            return float("nan")
+        zs.sort()
+        return zs[len(zs) // 2]
 
 
     def get_aligned_frames(self):
