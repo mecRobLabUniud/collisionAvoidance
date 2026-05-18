@@ -29,7 +29,7 @@ logging.getLogger('tensorrt').setLevel(logging.ERROR)
 # ─────────────────────────────────────────────────────────────────────────────
 W, H = 848, 480
 running = True
-save_data = True
+save_data = False
 display_stream = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
 video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")

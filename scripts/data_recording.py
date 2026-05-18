@@ -13,9 +13,11 @@ import numpy as np
 import os
 import json
 import struct
+import threading
 import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
-import threading
+from utils.data_transmitter import DataTransmitter
+from utils.video_recorder import VideoRecorder
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
@@ -109,50 +111,73 @@ def count_frames(idx_path: str) -> int:
 # ─────────────────────────────────────────────────────────────────────────────
 # Recording
 # ─────────────────────────────────────────────────────────────────────────────
-def record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx):
+def record_data(dtrs, skeleton_data_writers, color_writers):
     global frame_id
-    for n in range(int(n_devices)):
-        skeleton = sockets[n].recv_string()
-        frame = np.ndarray((H, W, C), dtype=np.uint8, buffer=shms[n].buf).copy()
 
-        with open(skeletons_filename[n], "a") as file:
-            file.write(skeleton + "\n")
+    # skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
+    # confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
 
-        write_frame(frames_bin[n], frames_idx[n], frame)
-        frame_id += 1
+    for dtr, skeleton_data_writer, color_writer in zip(dtrs, skeleton_data_writers, color_writers):
+        skeleton_data_packed = dtr.receive_packed_skeleton_data()
+        with open(skeleton_data_writer, "a") as file:
+            file.write(skeleton_data_packed + "\n")
+
+        raw_frame = dtr.receive_raw_frames()
+        color_writer.write(raw_frame)
+
+        # write_frame(frames_bin[n], frames_idx[n], frame)
+        # frame_id += 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Streaming
 # ─────────────────────────────────────────────────────────────────────────────
-def stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx):
+def stream_data(dtss, skeleton_data_readers, color_readers):
     global stream_cnt
 
-    print(f"\rStreaming frame {stream_cnt}", end="")
-    for n in range(n_devices):
-        with open(skeletons_filename[n], "r") as file:
+    for dts, skeleton_data_reader, color_reader in zip(dtss, skeleton_data_readers, color_readers):
+        with open(skeleton_data_reader, "r") as file:
             lines = file.readlines()
             if stream_cnt >= len(lines):
-                print(f"[stream_data] no more skeleton lines for device {n}")
+                print(f"[stream_data] no more skeleton lines")
                 return "reset"
-            skeleton_line = lines[stream_cnt]
+            skeleton_data_packed = lines[stream_cnt]
 
-        x, _, msg1, msg2 = skeleton_line.split("; ", 3)
-        skeleton = json.loads(msg1)
-        confidence = json.loads(msg2)
+            _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 2)
+            skeleton = json.loads(skeleton_packed)
+            confidence = json.loads(confidence_packed)
+            dts.send_skeleton_data(skeleton, confidence)
 
-        payload = (skeleton, confidence)
-        message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
-        socket.send_string(message)
+        with open(color_reader, "r") as file:
+            ...
+            dts.send_frames(frame)
+        
 
-        frame = read_frame(frames_bin[n], frames_idx[n], stream_cnt)
-        if frame is None:
-            print(f"[stream_data] could not load frame {stream_cnt}")
-            return "reset"
-
-        # Write into shared memory
-        buf = np.ndarray(frame.shape, dtype=frame.dtype, buffer=shms[n].buf)
-        buf[:] = frame[:]
+    # print(f"\rStreaming frame {stream_cnt}", end="")
+    # for n in range(n_devices):
+    #     with open(skeletons_filename[n], "r") as file:
+    #         lines = file.readlines()
+    #         if stream_cnt >= len(lines):
+    #             print(f"[stream_data] no more skeleton lines for device {n}")
+    #             return "reset"
+    #         skeleton_line = lines[stream_cnt]
+# 
+    #     x, _, msg1, msg2 = skeleton_line.split("; ", 3)
+    #     skeleton = json.loads(msg1)
+    #     confidence = json.loads(msg2)
+# 
+    #     payload = (skeleton, confidence)
+    #     message = (f"{topic}_{n}; {n_devices}; "f"{json.dumps(payload[0])}; {json.dumps(payload[1])}")
+    #     socket.send_string(message)
+# 
+    #     frame = read_frame(frames_bin[n], frames_idx[n], stream_cnt)
+    #     if frame is None:
+    #         print(f"[stream_data] could not load frame {stream_cnt}")
+    #         return "reset"
+# 
+    #     # Write into shared memory
+    #     buf = np.ndarray(frame.shape, dtype=frame.dtype, buffer=shms[n].buf)
+    #     buf[:] = frame[:]
 
     stream_cnt += 1
 
@@ -173,35 +198,11 @@ def init_filenames(arg):
             open(skeletons_filename[n], "w")
             open(frames_bin[n], "w")
             open(frames_idx[n], "w")
+
+    color_writer = VideoRecorder(f"media/color_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
+    depth_writer = VideoRecorder(f"media/depth_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
             
     return skeletons_filename, frames_bin, frames_idx
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ZeroMQ and shared-memory setup fro incoming data
-# ─────────────────────────────────────────────────────────────────────────────
-def setup_recording():
-    zctx = zmq.Context.instance()
-    probe = zctx.socket(zmq.SUB)
-    probe.setsockopt_string(zmq.SUBSCRIBE, topic)
-    probe.connect(f"tcp://localhost:{in_port}")
-    _, n_dev, _ = probe.recv_string().split("; ", 2)
-    probe.close()
-
-    sockets = []
-    shms = []
-    for n in range(int(n_dev)):
-        sock = zmq.Context.instance().socket(zmq.SUB)
-        sock.setsockopt(zmq.CONFLATE, 1)
-        sock.setsockopt_string(zmq.SUBSCRIBE, f"{topic}_{n}")
-        sock.connect(f"tcp://localhost:{in_port}")
-        sockets.append(sock)
-
-        shm = shared_memory.SharedMemory(name=f"shared_image_{n}")
-        rt.unregister(f"/{shm.name}", "shared_memory")
-        shms.append(shm)
-
-    return sockets, shms, n_dev
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -241,6 +242,9 @@ def setup_streaming(frames_bin_0: str, frames_idx_0: str):
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     global n_devices, stream_cnt
+    n_devices = 2
+    data_dir = os.path.join(script_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     # Start input listener in background thread
@@ -252,13 +256,14 @@ def main():
 
     if arg in ["--record", "-r"]:
         while running:
-            res = input("\nRecorded data are still presents in the working directory. Do you want to overwrite them? (y/n)\n")
+            res = input("\nRecorded data are already present in the working directory. Do you want to overwrite them? (y/n)\n")
             if res == "y":
                 print("Recording mode enabled. Press Ctrl+C to stop.")
-                sockets, shms, n_devices = setup_recording()
-                skeletons_filename, frames_bin, frames_idx = init_filenames("r")
+                dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
+                skeleton_data_writers = [open(os.path.join(data_dir, f"skeleton_{n}.txt"), "w") for n in range(int(n_devices))]
+                color_writers = [VideoRecorder(os.path.join(data_dir, f"media/color_{n}.avi"), "XVID", 60, (848, 480), is_color=True) for n in range(n_devices)]
                 while True:
-                    record_data(sockets, shms, skeletons_filename, frames_bin, frames_idx)
+                    record_data(dtrs, skeleton_data_writers, color_writers)
                     time.sleep(0.05)
             if res == "n":
                 break
@@ -268,15 +273,14 @@ def main():
 
     elif arg in ["--stream", "-s"]:
         print("Streaming mode enabled. Press Ctrl+C to stop.")
-        data_dir = os.path.join(script_dir, "data")
-        n_devices = sum(1 for f in os.listdir(data_dir) if f.endswith(".bin"))
-        skeletons_filename, frames_bin, frames_idx = init_filenames("s")
-        socket, shms = setup_streaming(frames_bin[0], frames_idx[0])
+        dtss = [DataTransmitter("sender", n, "SINGLE_CAMERA") for n in range(n_devices)]
+        skeleton_data_readers = [os.path.join(data_dir, f"skeleton_{n}.txt") for n in range(int(n_devices))]
+        color_readers = [... for n in range(n_devices)]
         time.sleep(1)
         try:
             while True:
                 if not paused:
-                    res = stream_data(socket, shms, skeletons_filename, frames_bin, frames_idx)
+                    res = stream_data(dtss, skeleton_data_readers, color_readers)
                     if res == "reset":
                         stream_cnt = 0
                     time.sleep(0.05)
@@ -284,7 +288,7 @@ def main():
                     time.sleep(0.1)                
         finally:
             for shm in shms:
-                shm.close()
+                shm.close()color_writer.write(frame)
                 shm.unlink()
 
     else:
