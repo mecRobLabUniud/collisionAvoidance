@@ -7,7 +7,7 @@
 """
 
 import time
-import np
+import numpy as np
 import signal
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.data_transmitter import DataTransmitter
@@ -21,7 +21,7 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-kfs = [KalmanFilter6D() for _ in range(skel_len)]
+kfs = [KalmanFilter3D() for _ in range(skel_len)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -39,11 +39,11 @@ def merging(dtrs, dts):
         confidence_marker = [confidence[i] for confidence in confidences if not confidence==None]
         merged_skeleton.append(kfs[i].step(skeleton_marker, confidence_marker).tolist())
 
-    merged_confidence = np.ones.astype(np.float32)        
-    dts.send_skeleton_data(merged_skeleton, merged_confidence)
+    merged_confidence = np.ones(skel_len).astype(np.float32)        
+    dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
 
     print(f"\rLoop time: {time.time()-t0}", end="")
-    time.sleep(0.2)
+    time.sleep(1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ def merging(dtrs, dts):
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
-    dts = DataTransmitter("sender", 0, "MERGED", port=7000)
+    dts = DataTransmitter("sender", 2, "MERGED", port=7000)
     # dtss = None
     print("Merging started correctly\n")
     
@@ -65,8 +65,9 @@ def main():
     while running:
         merging(dtrs, dts)
 
-    # for dtr in dtrs:
-    #     dtr.shutdown()
+    for dtr in dtrs:
+        dtr.shutdown()
+    dts.shutdown()
         
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ of the skeleton, according to the following keypoint convention:
 """
 
 import plotly.graph_objs as go
-import zmq
+import cv2
 import time
 import numpy as np
 import webbrowser
@@ -68,29 +68,20 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
 def update_bar_chart(n_intervals):
     global ret_prev
-    merged_skeleton = [dtr.receive_skeleton_data()[0] for dtr in dtrs[-1]]
-    # confidence = [dtr.receive_skeleton_data()[1] for dtr in dtrs[-1]]
+    merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
 
-    frames = [dtr.receive_frames() for dtr in dtrs[:-1]]
+    print('\n================================\n')
 
-    # fused_skels = []
-    # for i in range(skel_len):
-    #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
-    #     conf = [confidence[i] for confidence in confidences if not confidence==None]
-    #     fused_skels.append(kfs[i].step(skel, conf).tolist())
+    print(f"Received skeleton data: {merged_skeleton}")
+
+    frames = dtrs[0].receive_raw_frames()
+
+    cv2.imshow("Frame", frames)
+    cv2.waitKey(1)
 
     fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
 
-    # print("\n================================\n")
-
-    # fused_skels = skeletons[0]
-    # for i in range(skel_len):
-    #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
-    #     conf = [confidence[i] for confidence in confidences]
-    #     # print(f"Keypoint {i}: {[c for c in conf]}")
-    #     fused_skels.append(kfs[i].step(skel, conf))
-
-    x = [pnt[0] for pnt in merged_skeleton]
+    """x = [pnt[0] for pnt in merged_skeleton]
     y = [pnt[1] for pnt in merged_skeleton]
     z = [pnt[2] for pnt in merged_skeleton]
     for (a, b) in EDGES:
@@ -116,11 +107,7 @@ def update_bar_chart(n_intervals):
     fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
                           marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
 
-    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1400, margin=dict(r=20, l=20, b=10, t=10))
-
-    # Property "figure2" was used with component ID: "graph2" in one of the Output items of a callback. 
-    # This ID is assigned to a dash_core_components.Graph component in the layout, which does not support this property. 
-    # This ID was used in the callback(s) for Output(s): graph.figure, graph2.figure2, img_1.src, img_2.src, img_3.src, img_4.src
+    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1400, margin=dict(r=20, l=20, b=10, t=10))"""
 
     ret = [fig]
     for i in range(4):
@@ -151,7 +138,7 @@ def main():
                             style={"display": "flex", "width": "100%"})],
                         style={"display": "inline-block", "width": "100%"})],
                     style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=100, n_intervals=0)], 
+                    dcc.Interval(id='interval-component', interval=50, n_intervals=0)], 
                 id = "change-height", 
                 style={"display": "inline-block", "width": "100%", "height": "100%"})
     
@@ -164,7 +151,9 @@ def main():
 
     # interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
-    dtrs.append(DataTransmitter("receiver", 0, "MERGED", port=7000))
+    dtrs.append(DataTransmitter("receiver", 2, "MERGED", port=7000))
+
+    print(len(dtrs))
 
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)

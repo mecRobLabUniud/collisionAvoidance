@@ -22,6 +22,7 @@ from dash import Dash, dcc, html, Input, Output
 from statistics import mean
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.skeleton_receiver import SkeletonReceiver
+from utils.data_transmitter import DataTransmitter
 from copy import deepcopy
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
@@ -146,28 +147,16 @@ def main():
                 id = "change-height", 
                 style={"display": "inline-block", "width": "100%", "height": "100%"})
     
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
-    socket.connect(f"tcp://localhost:{in_port}")
-    _, n_devices, _ = socket.recv_string().split("; ", 2)
-    socket.close()
-
-    interfaces = [SkeletonReceiver(n, in_port).start() for n in range(int(n_devices))]
-
-    skeleton = interfaces[0].read_skeleton() 
-
-    while True:
-        print(skeleton)
-
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
+    dtrs.append(DataTransmitter("receiver", 2, "MERGED", port=7000))
 
     # webbrowser.open_new('http://127.0.0.1:5000/')
     app.run(debug=True, port=5000)
 
-    for interface in interfaces:
-        interface.stop()
+    for dtr in dtrs:
+        dtr.shutdown()
         
-
+import cv2
 # Entry point
 if __name__ == "__main__":
     main()

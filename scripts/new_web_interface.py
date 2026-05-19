@@ -5,7 +5,7 @@ import mmap
 import os
 from flask import Flask, render_template
 from flask_socketio import SocketIO
-from utils.skeleton_receiver import SkeletonReceiver
+from utils.data_transmitter import DataTransmitter
 
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
 COCO_SKELETON = [
@@ -17,21 +17,20 @@ COCO_SKELETON = [
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-interfaces = None
+dtrs = None
 in_port = 7000
 topic = "SKEL"
 
 # --- ZMQ thread: receives skeleton/point data and emits to browser ---
-def zmq_thread():
+def skeleton_thread():
     
 
     while True:
         try:
-            skeletons = [interface.read_skeleton() for interface in interfaces]
-            fused_skels = skeletons[0]
-            x = [pnt[0] for pnt in fused_skels]
-            y = [pnt[1] for pnt in fused_skels]
-            z = [pnt[2] for pnt in fused_skels]
+            merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+            x = [pnt[0] for pnt in merged_skeleton]
+            y = [pnt[1] for pnt in merged_skeleton]
+            z = [pnt[2] for pnt in merged_skeleton]
             for (a, b) in EDGES:
                 msg = {"x": [x[a], x[b]], "y": [y[a], y[b]], "z": [z[a], z[b]]}
                 socketio.emit("update_scatter", msg)
@@ -42,13 +41,13 @@ def zmq_thread():
 
 
 # --- Shared-memory / shared-image thread ---
-def image_thread():
+def frame_thread():
     shm_name = "/shared_image_0"          # adjust to your shm name
     shm_size = 848 *480 * 3               # adjust to your frame size
 
     while True:
         try:
-            frames = [interface.read_frame() for interface in interfaces]
+            frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
             for n, frame in enumerate(frames):
                 socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
@@ -62,20 +61,12 @@ def index():
 
 
 def main():
-    global interfaces
-    zctx = zmq.Context.instance()
-    socket = zctx.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, "MERGE")
-    socket.connect(f"tcp://localhost:{in_port}")
-    _, n_devices, _ = socket.recv_string().split("; ", 2)
-    socket.close()
+    global dtrs
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
+    dtrs.append(DataTransmitter("receiver", 2, "MERGED", port=7000))
 
-    print(n_devices)
-
-    interfaces = [SkeletonReceiver(n, in_port, "MERGE").start() for n in range(int(n_devices))]
-
-    threading.Thread(target=zmq_thread, daemon=True).start()              
-    threading.Thread(target=image_thread, daemon=True).start()
+    threading.Thread(target=skeleton_thread, daemon=True).start()              
+    threading.Thread(target=frame_thread, daemon=True).start()
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 
 
