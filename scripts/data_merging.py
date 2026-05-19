@@ -21,7 +21,7 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-kfs = [KalmanFilter3D() for _ in range(skel_len)]
+kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ def merging(dtrs, dts):
     dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
 
     print(f"\rLoop time: {time.time()-t0}", end="")
-    time.sleep(1)
+    time.sleep(0.016)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

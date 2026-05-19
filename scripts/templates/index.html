@@ -37,21 +37,57 @@
     </div>
 
     <script>
+
+
+
+        // Camera settings: eye = camera position, center = look-at point, up = up-vector
+        const camera = {
+        eye: { x: 0.5, y: 1.5, z: 0.5 },
+        center: { x: 0, y: 0, z: 0.1 },
+        up: { x: 0, y: 0, z: 1 },
+        projection: { type: 'perspective' } // 'perspective' or 'orthographic'
+        };
+
+        // Scene layout: aspectmode and axis ticks/labels; aspectmode='cube' or 'data'
+        const scene = {
+        camera: camera,
+        aspectmode: 'cube', // 'cube' makes axes equal (x=y=z). Use 'data' to match data ranges.
+        xaxis: { title: 'X', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444' , range: [-1, 1], nticks: 5},
+        yaxis: { title: 'Y', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444' , range: [-1, 1], nticks: 5},
+        zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444' , range: [-1, 1], nticks: 5}
+        };
+
+        // Layout: force a square plot by setting equal width and height and small margins
+        const size = 1200; // pixel size for both width and height (square)
+        const layout = {
+        width: size,
+        height: size,
+        margin: { l: 20, r: 20, t: 20, b: 20 }, // tight margins
+        scene: scene,
+        scene_dragmode: 'orbit', // needed if you set camera.up to something other than z (orbit respects up vector)
+        paper_bgcolor: '#ffffff',
+        plot_bgcolor: '#ffffff'
+        };
+
+        // Example: programmatically update the camera after 1.5s (demonstrates how to change view)
+        // setTimeout(() => {
+        // const newCamera = {
+        // eye: { x: -1.8, y: 0.8, z: 1.0 },
+        // center: { x: 0.2, y: 0, z: 0 },
+        // up: { x: 0, y: 0, z: 1 },
+        // projection: { type: 'perspective' }
+        // };
+        // Plotly.relayout('plot3d', { 'scene.camera': newCamera });
+        // }, 1500);
+
+
+
+
+
         const socket = io();   // single connection for everything
 
         // ── 3-D scatter ──────────────────────────────────────────────
         let plotInitialized = false;
-
-        const layout = {
-            title: '3D Skeleton Reconstruction',
-            scene: {
-                xaxis: { title: 'X', range: [-2, 2] },
-                yaxis: { title: 'Y', range: [-2, 2] },
-                zaxis: { title: 'Z', range: [-2, 2] }
-            },
-            margin: { l: 0, r: 0, b: 0, t: 50 }
-        };
-
         let x_data = []
         let y_data = []
         let z_data = []
@@ -64,9 +100,9 @@
 
         socket.on('display_scatter', function() {
             const trace = {
-                x: x_data.slice(),
-                y: y_data.slice(),
-                z: z_data.slice(),
+                x: x_data,
+                y: y_data,
+                z: z_data,
                 mode: 'markers+lines',
                 marker: {
                     color: 'rgb(127, 127, 127)',

@@ -7,13 +7,14 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO
 from utils.data_transmitter import DataTransmitter
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters 
+# ─────────────────────────────────────────────────────────────────────────────
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
-COCO_SKELETON = [
-    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-    (5, 7), (7, 9), (6, 8), (8, 10),
-    (5, 6), (5, 11), (6, 12), (11, 12),
-    (11, 13), (13, 15), (12, 14), (14, 16)
-]
+COCO_SKELETON = [(0, 1), (0, 2), (1, 3), (2, 4), (3, 5), 
+                (4, 6), (5, 7), (7, 9), (6, 8), (8, 10),
+                (5, 6), (5, 11), (6, 12), (11, 12),
+                (11, 13), (13, 15), (12, 14), (14, 16)]
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -21,10 +22,11 @@ dtrs = None
 in_port = 7000
 topic = "SKEL"
 
-# --- ZMQ thread: receives skeleton/point data and emits to browser ---
-def skeleton_thread():
-    
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton thread 
+# ─────────────────────────────────────────────────────────────────────────────
+def skeleton_thread():
     while True:
         try:
             merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
@@ -37,14 +39,13 @@ def skeleton_thread():
         except Exception as e:
             print(f"Skeleton thread error: {e}")
         socketio.emit("display_scatter")
-        socketio.sleep(0.02) 
+        socketio.sleep(0.016) 
 
 
-# --- Shared-memory / shared-image thread ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Frame thread
+# ─────────────────────────────────────────────────────────────────────────────
 def frame_thread():
-    shm_name = "/shared_image_0"          # adjust to your shm name
-    shm_size = 848 *480 * 3               # adjust to your frame size
-
     while True:
         try:
             frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
@@ -52,14 +53,20 @@ def frame_thread():
                 socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
-        socketio.sleep(0.02)
+        socketio.sleep(0.016)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Web interface route
+# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point 
+# ─────────────────────────────────────────────────────────────────────────────
 def main():
     global dtrs
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
