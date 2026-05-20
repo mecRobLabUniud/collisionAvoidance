@@ -1,7 +1,7 @@
 import base64
 import threading
 import zmq
-import mmap
+import time
 import os
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -29,6 +29,7 @@ topic = "SKEL"
 def skeleton_thread():
     while True:
         try:
+            t0 = time.time()
             merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
             x = [pnt[0] for pnt in merged_skeleton]
             y = [pnt[1] for pnt in merged_skeleton]
@@ -36,10 +37,11 @@ def skeleton_thread():
             for (a, b) in EDGES:
                 msg = {"x": [x[a], x[b]], "y": [y[a], y[b]], "z": [z[a], z[b]]}
                 socketio.emit("update_scatter", msg)
+            print(f"\rLoop time: {time.time()-t0}", end="")
         except Exception as e:
             print(f"Skeleton thread error: {e}")
         socketio.emit("display_scatter")
-        socketio.sleep(0.016) 
+        time.sleep(0.016) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ def frame_thread():
                 socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
-        socketio.sleep(0.016)
+        time.sleep(0.016)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -81,6 +81,8 @@
         // }, 1500);
 
 
+        setTimeout(update_scatter, 0);
+        setTimeout(display_scatter, 0);
 
 
 
@@ -88,44 +90,49 @@
 
         // ── 3-D scatter ──────────────────────────────────────────────
         let plotInitialized = false;
+
         let x_data = []
         let y_data = []
         let z_data = []
 
-        socket.on('update_scatter', function(point) {
-            x_data.push(point.x[0], point.x[1], null);
-            y_data.push(point.y[0], point.y[1], null);
-            z_data.push(point.z[0], point.z[1], null);         
-        });
+        function update_scatter() {
+            socket.on('update_scatter', function(point) {
+                x_data.push(point.x[0], point.x[1], null);
+                y_data.push(point.y[0], point.y[1], null);
+                z_data.push(point.z[0], point.z[1], null);         
+            });
+        }
 
-        socket.on('display_scatter', function() {
-            const trace = {
-                x: x_data,
-                y: y_data,
-                z: z_data,
-                mode: 'markers+lines',
-                marker: {
-                    color: 'rgb(127, 127, 127)',
-                    size: 10,
-                    symbol: 'circle',
-                    line: {
-                        color: 'rgb(204, 204, 204)',
-                        width: 5},
-                    opacity: 0.8},
-                type: 'scatter3d'};
+        function display_scatter() {
+            socket.on('display_scatter', function() {
+                const trace = {
+                    x: x_data,
+                    y: y_data,
+                    z: z_data,
+                    mode: 'markers+lines',
+                    marker: {
+                        color: 'rgb(127, 127, 127)',
+                        size: 10,
+                        symbol: 'circle',
+                        line: {
+                            color: 'rgb(204, 204, 204)',
+                            width: 5},
+                        opacity: 0.8},
+                    type: 'scatter3d'};
 
-            if (!plotInitialized) {
-                Plotly.newPlot('plot', [trace], layout);
-                plotInitialized = true;
-            } else {
-                // react() diffs and redraws only what changed
-                Plotly.react('plot', [trace], layout);
-            }
+                if (!plotInitialized) {
+                    Plotly.newPlot('plot', [trace], layout);
+                    plotInitialized = true;
+                } else {
+                    // react() diffs and redraws only what changed
+                    Plotly.react('plot', [trace], layout);
+                }
 
-            x_data = []
-            y_data = []
-            z_data = []
-        });
+                x_data = []
+                y_data = []
+                z_data = []
+            });
+        }
 
         // ── Image stream ─────────────────────────────────────────────
         socket.on('update_stream1', function(data) {
