@@ -9,6 +9,8 @@
 </head>
 <body>
     <h1 style="font-size:50px;">Skeleton tracking with Realsense cameras</h1>
+
+    <p id="test">Data...</p>
     
     <div style="display:flex; height:1000px">
         <div style="width:70%; height:100%">
@@ -37,18 +39,16 @@
     </div>
 
     <script>
-
-
-
-        // Camera settings: eye = camera position, center = look-at point, up = up-vector
+        // ─────────────────────────────────────────────────────────────────────────────
+        // 3D plot setup
+        // ─────────────────────────────────────────────────────────────────────────────
         const camera = {
         eye: { x: 0.5, y: 1.5, z: 0.5 },
         center: { x: 0, y: 0, z: 0.1 },
         up: { x: 0, y: 0, z: 1 },
-        projection: { type: 'perspective' } // 'perspective' or 'orthographic'
+        projection: { type: 'perspective' }
         };
 
-        // Scene layout: aspectmode and axis ticks/labels; aspectmode='cube' or 'data'
         const scene = {
         camera: camera,
         aspectmode: 'cube', // 'cube' makes axes equal (x=y=z). Use 'data' to match data ranges.
@@ -57,66 +57,42 @@
         zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444' , range: [-1, 1], nticks: 5}
         };
 
-        // Layout: force a square plot by setting equal width and height and small margins
-        const size = 1200; // pixel size for both width and height (square)
+        const size = 1200;
         const layout = {
         width: size,
         height: size,
-        margin: { l: 20, r: 20, t: 20, b: 20 }, // tight margins
+        margin: { l: 20, r: 20, t: 20, b: 20 },
         scene: scene,
-        scene_dragmode: 'orbit', // needed if you set camera.up to something other than z (orbit respects up vector)
+        scene_dragmode: 'orbit',
         paper_bgcolor: '#ffffff',
         plot_bgcolor: '#ffffff'
-        };
-
-        // Example: programmatically update the camera after 1.5s (demonstrates how to change view)
-        // setTimeout(() => {
-        // const newCamera = {
-        // eye: { x: -1.8, y: 0.8, z: 1.0 },
-        // center: { x: 0.2, y: 0, z: 0 },
-        // up: { x: 0, y: 0, z: 1 },
-        // projection: { type: 'perspective' }
-        // };
-        // Plotly.relayout('plot3d', { 'scene.camera': newCamera });
-        // }, 1500);
-
-
-        setTimeout(update_scatter, 0);
-        setTimeout(display_scatter, 0);
-
-
+        };     
 
         const socket = io();   // single connection for everything
 
-        // ── 3-D scatter ──────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────────────
+        // 3D plot update: receive new skeleton data and update the plot 
+        // ─────────────────────────────────────────────────────────────────────────────
         let plotInitialized = false;
 
-        let x_data = []
-        let y_data = []
-        let z_data = []
+        function update_plot() {
+            socket.on('update_plot', function(point) {
 
-        function update_scatter() {
-            socket.on('update_scatter', function(point) {
-                x_data.push(point.x[0], point.x[1], null);
-                y_data.push(point.y[0], point.y[1], null);
-                z_data.push(point.z[0], point.z[1], null);         
-            });
-        }
+                document.getElementById('test').innerHTML = point.x;
 
-        function display_scatter() {
-            socket.on('display_scatter', function() {
                 const trace = {
-                    x: x_data,
-                    y: y_data,
-                    z: z_data,
+                    x: point.x,
+                    y: point.y,
+                    z: point.z,
                     mode: 'markers+lines',
                     marker: {
                         color: 'rgb(127, 127, 127)',
                         size: 10,
                         symbol: 'circle',
-                        line: {
-                            color: 'rgb(204, 204, 204)',
-                            width: 5},
+                        opacity: 0.8},
+                    line: {
+                        color: 'rgb(204, 204, 204)',
+                        width: 5,
                         opacity: 0.8},
                     type: 'scatter3d'};
 
@@ -124,17 +100,17 @@
                     Plotly.newPlot('plot', [trace], layout);
                     plotInitialized = true;
                 } else {
-                    // react() diffs and redraws only what changed
                     Plotly.react('plot', [trace], layout);
                 }
-
-                x_data = []
-                y_data = []
-                z_data = []
             });
         }
 
-        // ── Image stream ─────────────────────────────────────────────
+        setTimeout(update_plot, 0);
+
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // Streaming updates: receive new frames and update the corresponding image sources
+        // ─────────────────────────────────────────────────────────────────────────────
         socket.on('update_stream1', function(data) {
             document.getElementById('image1').src = data.frame;
         });

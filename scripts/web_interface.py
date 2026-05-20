@@ -1,163 +1,96 @@
-#!/usr/bin/env python3
-
-"""
-░█░█░█▀▀░█▀▄░░░▀█▀░█▀█░▀█▀░█▀▀░█▀▄░█▀▀░█▀█░█▀▀░█▀▀
-░█▄█░█▀▀░█▀▄░░░░█░░█░█░░█░░█▀▀░█▀▄░█▀▀░█▀█░█░░░█▀▀
-░▀░▀░▀▀▀░▀▀░░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀
-
-User interface for the rendering of the 3D reconstruction
-of the skeleton, according to the following keypoint convention:
-0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
-5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
-9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
-13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
-"""
-
-import plotly.graph_objs as go
-import zmq
-import time
+import base64
+import threading
 import numpy as np
-import webbrowser
-from dash import Dash, dcc, html, Input, Output
-from statistics import mean
-from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
-from utils.skeleton_receiver import SkeletonReceiver
+import time
+import os
+from flask import Flask, render_template
+from flask_socketio import SocketIO
 from utils.data_transmitter import DataTransmitter
-from copy import deepcopy
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters 
+# ─────────────────────────────────────────────────────────────────────────────
 TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
-COCO_SKELETON = [
-    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-    (5, 7), (7, 9), (6, 8), (8, 10),
-    (5, 6), (5, 11), (6, 12), (11, 12),
-    (11, 13), (13, 15), (12, 14), (14, 16)
-]
+COCO_SKELETON = [(0, 1), (0, 2), (1, 3), (2, 4), (3, 5), 
+                (4, 6), (5, 7), (7, 9), (6, 8), (8, 10),
+                (5, 6), (5, 11), (6, 12), (11, 12),
+                (11, 13), (13, 15), (12, 14), (14, 16)]
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
-
-# Parameters
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
+dtrs = None
 in_port = 7000
 topic = "SKEL"
-running = True
-camera = dict(up=dict(x=0, y=0, z=1),
-        center=dict(x=0, y=0, z=-0.1),
-        eye=dict(x=0, y=2, z=0.5))
-camera2 = dict(up=dict(x=0, y=0, z=1),
-        center=dict(x=0, y=0, z=-0.1),
-        eye=dict(x=2, y=0, z=0.5))
-data = None
-pic = None
-interfaces = None
-skel_len = 17
-H, W, C = 480, 848, 3 
-dtype = np.uint8
-marker_sz = 8
-line_wdt = 5
-t0 = time.time()
-ret_prev = []
 
 
-# Launching Dash app
-app = Dash(__name__)
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton thread 
+# ─────────────────────────────────────────────────────────────────────────────
+def skeleton_thread():
+    while True:
+        try:
+            t0 = time.time()
+            merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+            x = [pnt[0] for pnt in merged_skeleton]
+            y = [pnt[1] for pnt in merged_skeleton]
+            z = [pnt[2] for pnt in merged_skeleton]
+            x_data =[]
+            y_data =[]
+            z_data =[]
+            for (a, b) in EDGES:
+                x_data.append(x[a] if not np.isnan(x[a]) else None)
+                x_data.append(x[b] if not np.isnan(x[b]) else None)
+                x_data.append(None)
+                y_data.append(y[a] if not np.isnan(y[a]) else None)
+                y_data.append(y[b] if not np.isnan(y[b]) else None)
+                y_data.append(None)
+                z_data.append(z[a] if not np.isnan(z[a]) else None)
+                z_data.append(z[b] if not np.isnan(z[b]) else None)
+                z_data.append(None)
 
-# Initializing kalman filter classes
-# kfs = [ImprovedKalmanFilter6D() for _ in range(skel_len)]
-kfs = [KalmanFilter6D() for _ in range(skel_len)]
-
-
-@app.callback([Output("graph", "figure"), Output("img_1", "src"), Output("img_2", "src"), Output("img_3", "src"), Output("img_4", "src")], Input('interval-component', 'n_intervals'))
-# @app.callback(Output("graph", "figure"), Input('interval-component', 'n_intervals'))
-def update_bar_chart(n_intervals):
-    global ret_prev
-    skeletons = [interface.read_skeleton() for interface in interfaces]
-    frames = [interface.read_frame() for interface in interfaces]
-
-    fig = go.Figure(data=[go.Scatter3d(x=[], y=[], z=[])])
-
-    # print("\n================================\n")
-
-    fused_skels = skeletons[0]
-    # for i in range(skel_len):
-    #     skel = [skeleton[i] for skeleton in skeletons if not skeleton==None]
-    #     conf = [confidence[i] for confidence in confidences]
-    #     # print(f"Keypoint {i}: {[c for c in conf]}")
-    #     fused_skels.append(kfs[i].step(skel, conf))
-
-    x = [pnt[0] for pnt in fused_skels]
-    y = [pnt[1] for pnt in fused_skels]
-    z = [pnt[2] for pnt in fused_skels]
-    for (a, b) in EDGES:
-        fig.add_scatter3d(x=[x[a], x[b]], y=[y[a], y[b]], z=[z[a], z[b]], mode='markers+lines', 
-                          marker=dict(color='black', size=marker_sz), line=dict(color='black', width=line_wdt), opacity=0.8)
-        
-    try:
-        mean_x = mean([x for x in x if not np.isnan(x)])
-        mean_y = mean([y for y in y if not np.isnan(y)])
-        mean_z = mean([z for z in z if not np.isnan(z)])
-        
-        mass_center = [mean_x, mean_y, mean_z]
-        scene = dict(xaxis = dict(nticks=10, range=[mass_center[0]-1, mass_center[0]+1],),
-                    yaxis = dict(nticks=10, range=[mass_center[1]-1, mass_center[1]+1],),
-                    zaxis = dict(nticks=10, range=[mass_center[2]-1, mass_center[2]+1],))
-    except:
-        return ret_prev
-        
-    fig.add_scatter3d(x=[0, 0.1], y=[0, 0], z=[0, 0], mode='markers+lines', 
-                          marker=dict(color='red', size=marker_sz), line=dict(color='red', width=line_wdt), opacity=0.8)
-    fig.add_scatter3d(x=[0, 0], y=[0, 0.1], z=[0, 0], mode='markers+lines', 
-                          marker=dict(color='green', size=marker_sz), line=dict(color='green', width=line_wdt), opacity=0.8)
-    fig.add_scatter3d(x=[0, 0], y=[0, 0], z=[0, 0.1], mode='markers+lines', 
-                          marker=dict(color='blue', size=marker_sz), line=dict(color='blue', width=line_wdt), opacity=0.8)
-
-    fig.update_layout(showlegend=False,scene=scene, scene_camera=camera, scene_aspectmode='cube', height=1200, width=1400, margin=dict(r=20, l=20, b=10, t=10))
-
-    # Property "figure2" was used with component ID: "graph2" in one of the Output items of a callback. 
-    # This ID is assigned to a dash_core_components.Graph component in the layout, which does not support this property. 
-    # This ID was used in the callback(s) for Output(s): graph.figure, graph2.figure2, img_1.src, img_2.src, img_3.src, img_4.src
-
-    ret = [fig]
-    for i in range(4):
-        try: 
-            ret.append(frames[i])
-        except:
-            ret.append(None)
-    ret_prev = ret
-
-    return ret
+            msg = {"x": x_data, "y": y_data, "z": z_data}
+            socketio.emit("update_plot", msg)
+            print(f"\rLoop time: {time.time()-t0}", end="")
+        except Exception as e:
+            print(f"Skeleton thread error: {e}")
+        socketio.sleep(0.016) 
 
 
-# Main loop to receive data via ZeroMQ and shared_memory and update the plot
+# ─────────────────────────────────────────────────────────────────────────────
+# Frame thread
+# ─────────────────────────────────────────────────────────────────────────────
+def frame_thread():
+    while True:
+        try:
+            frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
+            for n, frame in enumerate(frames):
+                socketio.emit(f"update_stream{n+1}", {"frame": frame})
+        except Exception as e:
+            print(f"Image thread error: {e}")
+        time.sleep(0.016)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Web interface route
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point 
+# ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global interfaces
-    app.layout = html.Div([
-                    html.H1('Skeleton tracking 3D scatter'),
-                    html.Div([
-                        dcc.Graph(id="graph"),
-                        html.Div([
-                            html.Div([
-                                html.Img(id="img_1", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"}),
-                                html.Img(id="img_2", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"})],
-                            style={"display": "flex", "width": "100%"}),
-                            html.Div([
-                                html.Img(id="img_3", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"}),
-                                html.Img(id="img_4", style={"height": "300px", "width": "530px", "margin": "20 20 20 20", "padding": "20 20 20 20"})],
-                            style={"display": "flex", "width": "100%"})],
-                        style={"display": "inline-block", "width": "100%"})],
-                    style={"display": "flex", "width": "100%"}),
-                    dcc.Interval(id='interval-component', interval=100, n_intervals=0)], 
-                id = "change-height", 
-                style={"display": "inline-block", "width": "100%", "height": "100%"})
-    
-    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
-    dtrs.append(DataTransmitter("receiver", 2, "MERGED", port=7000))
+    global dtrs
+    n_devices = 1
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
+    dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
 
-    # webbrowser.open_new('http://127.0.0.1:5000/')
-    app.run(debug=True, port=5000)
+    threading.Thread(target=skeleton_thread, daemon=True).start()              
+    threading.Thread(target=frame_thread, daemon=True).start()
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 
-    for dtr in dtrs:
-        dtr.shutdown()
-        
-import cv2
-# Entry point
+
 if __name__ == "__main__":
     main()
-    

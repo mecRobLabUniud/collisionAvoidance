@@ -50,8 +50,9 @@ def merging(dtrs, dts):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(2)]
-    dts = DataTransmitter("sender", 2, "MERGED", port=7000)
+    n_devices = 1
+    dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
+    dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
     # dtss = None
     print("Merging started correctly\n")
     
