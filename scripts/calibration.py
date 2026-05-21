@@ -14,6 +14,9 @@ import pyrealsense2 as rs
 from utils.marker_detector  import * # MarkerDetector
 
 # Parameters
+script_dir = os.path.dirname(os.path.abspath(__file__))
+data_dir = os.path.join(script_dir, "data")
+os.makedirs(data_dir, exist_ok=True)
 
 
 # Function for saving rotation matrix on file
@@ -92,7 +95,7 @@ def main():
             print(f"Finl: {matrix}")
 
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            save_file = os.path.join(script_dir, f"calibration/pose_{serial}.txt")
+            save_file = os.path.join(data_dir, f"calibration/pose_{serial}.txt")
             write_rotation_matrix_to_file(save_file, matrix)
 
     print(f"Calibration ended correctly. Marker was detected by all the devices.")
