@@ -203,10 +203,13 @@ class DataTransmitter:
     def shutdown(self):
         if not self.socket is None:
             self.socket.close()
-        # if not self.shm is None:
-        #     rt.unregister(f"/{self.shm.name}", "shared_memory")
-        #     self.shm.close()
-        #     self.shm.unlink() 
+        try:
+            if not self.shm is None:
+                rt.unregister(f"/{self.shm.name}", "shared_memory")
+                self.shm.close()
+                self.shm.unlink() 
+        except:
+            pass
 
 
-    
+        
