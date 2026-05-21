@@ -9,8 +9,6 @@
 </head>
 <body>
     <h1 style="font-size:50px;">Skeleton tracking with Realsense cameras</h1>
-
-    <p id="test">Data...</p>
     
     <div style="display:flex; height:1000px">
         <div style="width:70%; height:100%">
@@ -77,9 +75,6 @@
 
         function update_plot() {
             socket.on('update_plot', function(point) {
-
-                document.getElementById('test').innerHTML = point.x;
-
                 const trace = {
                     x: point.x,
                     y: point.y,
@@ -105,7 +100,7 @@
             });
         }
 
-        setTimeout(update_plot, 0);
+        setTimeout(update_plot, 0.01);
 
 
         // ─────────────────────────────────────────────────────────────────────────────

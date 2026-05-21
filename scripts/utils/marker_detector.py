@@ -75,15 +75,15 @@ class MarkerDetector:
                 # Estimate pose of each marker
                 for i in range(len(ids)):
                     if ids[i] == marker_ID:
-                        # rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners[i], self.dim, self.matrix_coefficients, self.distortion_coefficients)
+                        rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners[i], self.dim, self.matrix_coefficients, self.distortion_coefficients)
                         
-                        if prev_rvec is not None:
-                            _, rvec, tvec = cv2.solvePnP(self.obj_points, corners, self.matrix_coefficients, self.distortion_coefficients,rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),useExtrinsicGuess=True,flags=cv2.SOLVEPNP_IPPE_SQUARE)
-                        else:
-                            _, rvec, tvec = cv2.solvePnP(self.obj_points, corners[i], self.matrix_coefficients, self.distortion_coefficients, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+                        # if prev_rvec is not None:
+                        #     _, rvec, tvec = cv2.solvePnP(self.obj_points, corners, self.matrix_coefficients, self.distortion_coefficients,rvec=prev_rvec.copy(), tvec=prev_tvec.copy(),useExtrinsicGuess=True,flags=cv2.SOLVEPNP_IPPE_SQUARE)
+                        # else:
+                        #     _, rvec, tvec = cv2.solvePnP(self.obj_points, corners[i], self.matrix_coefficients, self.distortion_coefficients, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-                        rvec, tvec = self.smooth_pose(rvec, tvec, prev_rvec, prev_tvec, alpha=0.3)
-                        prev_rvec, prev_tvec = rvec.copy(), tvec.copy()
+                        # rvec, tvec = self.smooth_pose(rvec, tvec, prev_rvec, prev_tvec, alpha=0.3)
+                        # prev_rvec, prev_tvec = rvec.copy(), tvec.copy()
                         
                         # Build 4x4 pose matrix [R | t; 0 0 0 1]
                         R_mat, _ = cv2.Rodrigues(rvec)

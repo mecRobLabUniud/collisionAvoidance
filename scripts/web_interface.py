@@ -53,7 +53,7 @@ def skeleton_thread():
             print(f"\rLoop time: {time.time()-t0}", end="")
         except Exception as e:
             print(f"Skeleton thread error: {e}")
-        socketio.sleep(0.016) 
+        time.sleep(0.01) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ def frame_thread():
                 socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
-        time.sleep(0.016)
+        time.sleep(0.01)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ def index():
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     global dtrs
-    n_devices = 1
+    n_devices = 2
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
 
