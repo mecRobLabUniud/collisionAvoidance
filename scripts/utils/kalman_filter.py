@@ -69,6 +69,15 @@ class KalmanFilter3D:
         return self.s_k if updated else np.array([np.nan, np.nan, np.nan])
 
 
+
+
+
+
+
+
+
+
+
 class KalmanFilter6D:
     def __init__(self):
         self.conf_thresh = 0.5
@@ -140,6 +149,14 @@ class KalmanFilter6D:
         self.old_meas = self.s_k[:3].copy()
         
         return self.s_k[:3] if updated else np.array([np.nan, np.nan, np.nan])
+
+
+
+
+
+
+
+
 
 
 def _joseph_update(P, K, H, n):
@@ -313,9 +330,9 @@ class ImprovedKalmanFilter6D:
         if d > threshold:
             return 1
  
-        K        = self.p_k.dot(self.H_k.T).dot(np.linalg.inv(S))
+        K = self.p_k.dot(self.H_k.T).dot(np.linalg.inv(S))
         self.s_k = self.s_k + K.dot(y_k)
-        self.p_k = _joseph_update(self.p_k, K, self.H_k, self.n)
+        self.p_k = _joseph_update(self.p_k, K, self.H_k, self.n)    #!!!
         return 0
  
     # ------------------------------------------------------------------
@@ -378,13 +395,15 @@ class ImprovedKalmanFilter6D:
             # Base measurement noise from confidence
             r_base = (1.1 - conf) ** 2
  
-            if not meas_ok or cam_st.is_occluded:
-                # Inflate R heavily — the measurement may be garbage,
-                # but we still pass it so the filter stays numerically
-                # warm.  The inflated R means it will have minimal effect.
-                r_scale = self.occlusion_R_scale
-            else:
-                r_scale = 1.0
+            # if not meas_ok or cam_st.is_occluded:
+            #     # Inflate R heavily — the measurement may be garbage,
+            #     # but we still pass it so the filter stays numerically
+            #     # warm.  The inflated R means it will have minimal effect.
+            #     r_scale = self.occlusion_R_scale
+            # else:
+            #     r_scale = 1.0
+
+            r_scale = 1.0
  
             self.R = r_base * r_scale * np.eye(3)
  

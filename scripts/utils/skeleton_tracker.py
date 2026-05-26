@@ -20,6 +20,7 @@ import pyrealsense2 as rs
 import threading
 import logging
 from utils.filters import Keypoints3DSmoother
+from utils.decorators import chronometer, set_rate
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -96,6 +97,7 @@ class SkeletonTracker:
         self.started = True
         self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
         self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
+
         self.camera_thread.start()
         self.model_thread.start()
         return self
@@ -123,20 +125,8 @@ class SkeletonTracker:
                 self.color = color
                 self.depth = depth
 
-            # if self.save_data:
-            #     color_np = np.asanyarray(color.get_data())
-            #     depth_np = np.asanyarray(depth.get_data())
-            #     depth_8u = cv2.normalize(depth_np, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            #     depth_colormap = cv2.applyColorMap(depth_8u, cv2.COLORMAP_JET)
-# 
-            #     self.color_writer.write(color_np)
-            #     self.depth_writer.write(depth_colormap)
-
 
     def skeleton_tracking(self, model):
-        # if self.save_data:
-        #     self.frame_writer = VideoRecorder(f"media/tracked_{self.device}.avi", "XVID", 60, (848, 480), is_color=True)
-
         while running and self.started:
             if not self.depth or not self.color:
                 continue
@@ -145,46 +135,36 @@ class SkeletonTracker:
                     color = self.color
                     depth = self.depth
 
-            # Inferenza rete neurale
+            # Neural network inference
             color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
 
-            # Se è stata rilevata almeno una persona
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
                 person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
                 xy = person[:, :2]
                 conf = person[:, 2]
-
-                # Intrinseci della camera per la deproiezione
-                
-
-                # Estrazione coordinate 3D nel frame Camera
                 xyz_cam = np.full((17, 3), np.nan, dtype=np.float32)
                 for k in TARGET_KEYPOINTS:
                     if conf[k] < conf_thr:
                         continue
                     u, v = float(xy[k, 0]), float(xy[k, 1])
-                    
-                    # MODIFICA: Scarta keypoint troppo vicini ai bordi dell'immagine (lente distorta / parzialmente fuori)
                     margin = 15
                     if u < margin or u > self.W - margin or v < margin or v > self.H - margin:
                         continue
 
-                    # Lettura robusta della profondità (con max_dist e R aumentato)
+                    # Depth reading
                     z = self.robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
                     if not math.isfinite(z):
                         continue
-                    # Deproiezione: da pixel 2D + depth, a punto 3D (metri)
                     X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
                     xyz_cam[k] = np.array([X, Y, Z], dtype=np.float32)
 
-                # Filtraggio temporale (OneEuroFilter)
+                # Temporal filter
                 with self.mutex:
                     self.xyz = self.smoother.update(xyz_cam, conf, conf_thr)
                     self.conf = conf
                     
-                # --- VISUALIZZAZIONE REAL-TIME ---
-                # Disegna lo scheletro direttamente sull'immagine RGB per il debug a video
+                # Image annotation for debugging
                 for (u, v) in EDGES:
                     if conf[u] >= conf_thr and conf[v] >= conf_thr:
                         pt1 = (int(xy[u, 0]), int(xy[u, 1]))
@@ -195,10 +175,7 @@ class SkeletonTracker:
                         cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 4, (0, 0, 255), -1)
 
             with self.mutex:
-                self.frame = color_img
-
-            # if self.save_data:
-            #     self.frame_writer.write(color_img)
+                self.frame = color_img.copy()
 
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -291,7 +268,6 @@ class SkeletonTracker:
 
 
     def shutdown(self):
-        #if not self.thread is None:
         self.started = False
         self.camera_thread.join()
         self.model_thread.join()

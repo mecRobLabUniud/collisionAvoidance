@@ -11,6 +11,7 @@ import numpy as np
 import signal
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.data_transmitter import DataTransmitter
+from utils.decorators import chronometer, set_rate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
@@ -27,9 +28,9 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # ─────────────────────────────────────────────────────────────────────────────
 # Merging
 # ─────────────────────────────────────────────────────────────────────────────
+@set_rate(60)
+@chronometer
 def merging(dtrs, dts):
-    t0 = time.time()
-
     skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
     confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
 
@@ -39,30 +40,27 @@ def merging(dtrs, dts):
         confidence_marker = [confidence[i] for confidence in confidences if not confidence==None]
         merged_skeleton.append(kfs[i].step(skeleton_marker, confidence_marker).tolist())
 
-    merged_confidence = np.ones(skel_len).astype(np.float32)        
+    merged_confidence = np.ones(skel_len).astype(np.float32)
     dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
-
-    print(f"\rLoop time: {time.time()-t0}", end="")
-    time.sleep(0.016)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    n_devices = 2
+    n_devices = 1
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
-    # dtss = None
     print("Merging started correctly\n")
     
-        # Clear shutdown logic
+    # Clear shutdown logic
     def signal_handler(sig, frame):
         global running
         running = False
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
+    # Main loop
     while running:
         merging(dtrs, dts)
 

@@ -1,11 +1,26 @@
-import base64
+#!/usr/bin/env python3
+
+"""
+░█░█░█▀▀░█▀▄░░░▀█▀░█▀█░▀█▀░█▀▀░█▀▄░█▀▀░█▀█░█▀▀░█▀▀
+░█▄█░█▀▀░█▀▄░░░░█░░█░█░░█░░█▀▀░█▀▄░█▀▀░█▀█░█░░░█▀▀
+░▀░▀░▀▀▀░▀▀░░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀
+
+User interface for the rendering of the 3D reconstruction
+of the skeleton, according to the following keypoint convention:
+0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
+5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
+9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
+13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
+"""
+
+import webbrowser
 import threading
 import numpy as np
 import time
-import os
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from utils.data_transmitter import DataTransmitter
+from utils.decorators import chronometer, set_rate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters 
@@ -29,7 +44,6 @@ topic = "SKEL"
 def skeleton_thread():
     while True:
         try:
-            t0 = time.time()
             merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
             x = [pnt[0] for pnt in merged_skeleton]
             y = [pnt[1] for pnt in merged_skeleton]
@@ -50,10 +64,10 @@ def skeleton_thread():
 
             msg = {"x": x_data, "y": y_data, "z": z_data}
             socketio.emit("update_plot", msg)
-            print(f"\rLoop time: {time.time()-t0}", end="")
+            
         except Exception as e:
             print(f"Skeleton thread error: {e}")
-        time.sleep(0.01) 
+        # time.sleep(0.01) 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +81,7 @@ def frame_thread():
                 socketio.emit(f"update_stream{n+1}", {"frame": frame})
         except Exception as e:
             print(f"Image thread error: {e}")
-        time.sleep(0.01)
+        # time.sleep(0.01)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,14 +97,15 @@ def index():
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     global dtrs
-    n_devices = 2
+    n_devices = 1
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
-
+    webbrowser.open_new('http://127.0.0.1:5000/')
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+    
 
 if __name__ == "__main__":
     main()

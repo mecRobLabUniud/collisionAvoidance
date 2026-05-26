@@ -20,6 +20,7 @@ import pyrealsense2 as rs
 from ultralytics import YOLO
 from utils.skeleton_tracker import SkeletonTracker
 from utils.data_transmitter import DataTransmitter
+from utils.decorators import chronometer, set_rate
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -32,7 +33,6 @@ running = True
 save_data = False
 display_stream = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
-video_filename = os.path.join(script_dir, "../media/skeleton_tracking.avi")
 yolo_model = "yolo26n-pose"
 
 
@@ -94,7 +94,7 @@ def main():
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()
-        rotation_matrix = load_rotation_matrix(os.path.join(script_dir, f"calibration/pose_{serial}.txt"))
+        rotation_matrix = load_rotation_matrix(os.path.join(script_dir, f"data/calibration/pose_{serial}.txt"))
         rotation_matrices.append(rotation_matrix)
 
         print(f"Device {n} initialized: {device.get_info(rs.camera_info.name)} (SN: {device.get_info(rs.camera_info.serial_number)})")
@@ -107,6 +107,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
+    # Main loop
     while running:
         tracking(dtss, trackers, rotation_matrices)
 

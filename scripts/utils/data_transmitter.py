@@ -15,6 +15,7 @@ import base64
 import numpy as np
 import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
+from utils.decorators import requires, chronometer, set_rate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
@@ -23,20 +24,6 @@ from multiprocessing import shared_memory
 pic = None
 H, W, C = 480, 848, 3 
 dtype = np.uint8
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Decorator
-# ─────────────────────────────────────────────────────────────────────────────
-def requires(mode):
-    def decorator(func):
-        def wrapper(self, *args, **kwargs):
-            if self.mode == mode:
-                return func(self, *args, **kwargs)
-            else: 
-                raise AttributeError(f"'{func.__name__}' method is not enabled")
-        return wrapper
-    return decorator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +87,10 @@ class DataTransmitter:
         try:
             shm = shared_memory.SharedMemory(create=True, size=self.nbytes, name=f"shared_image{self.device_id}")
         except FileExistsError:
-            existing = shared_memory.SharedMemory(name=f"shared_image{self.device_id}")
-            existing.close()
-            existing.unlink()
-            shm = shared_memory.SharedMemory(create=True, size=self.nbytes, name=f"shared_image{self.device_id}")
+            # existing = shared_memory.SharedMemory(name=f"shared_image{self.device_id}")
+            # existing.close()
+            # existing.unlink()
+            shm = shared_memory.SharedMemory(create=False, size=self.nbytes, name=f"shared_image{self.device_id}")
         self.shm = shm
 
 
@@ -132,7 +119,7 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     def setup_shm_receiver(self):
         shm = shared_memory.SharedMemory(name=f"shared_image{self.device_id}")
-        rt.unregister(f"/{shm.name}", "shared_memory")
+        # rt.unregister(f"/{shm.name}", "shared_memory")
         self.shm = shm
 
 
@@ -178,9 +165,7 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     @requires("receiver")
     def _receive_frames(self):
-        # print(self.shm.name)
         frame_raw = self.receive_raw_frames()
-        # print(frame_raw)
         frame = self.cv2_to_b64(frame_raw)
         return frame
 
@@ -190,10 +175,12 @@ class DataTransmitter:
     # ─────────────────────────────────────────────────────────────────────────────
     @requires("receiver")
     def _receive_skeleton_data(self):
+        t0 = time.time()
         skeleton_data_packed = self.receive_packed_skeleton_data()
         _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 2)
         skeleton = json.loads(skeleton_packed)
         confidence = json.loads(confidence_packed)
+        print(f"\nData unpacking time: {time.time()-t0:.4f}s", end="")
         return skeleton, confidence
     
 
