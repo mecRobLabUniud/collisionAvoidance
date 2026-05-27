@@ -83,7 +83,6 @@ def main():
     dtss = []
     trackers = []
     rotation_matrices = []
-    data_writers = []
     for n, device in enumerate(devices):
         # Inizializzazione sender
         dts = DataTransmitter("sender", n, "SINGLE_CAMERA")

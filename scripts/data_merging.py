@@ -22,13 +22,13 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-kfs = [KalmanFilter6D() for _ in range(skel_len)]
+kfs = [KalmanFilter3D() for _ in range(skel_len)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Merging
 # ─────────────────────────────────────────────────────────────────────────────
-@set_rate(60)
+# @set_rate(60)
 @chronometer
 def merging(dtrs, dts):
     skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
@@ -48,18 +48,11 @@ def merging(dtrs, dts):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    n_devices = 1
+    n_devices = 2
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
     print("Merging started correctly\n")
     
-    # Clear shutdown logic
-    def signal_handler(sig, frame):
-        global running
-        running = False
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
     # Main loop
     while running:
         merging(dtrs, dts)
