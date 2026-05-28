@@ -6,7 +6,7 @@
 ░▀▀░░▀░▀░░▀░░▀░▀░░░▀░▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
 """
 
-import time
+import sys
 import numpy as np
 import signal
 from utils.kalman_filter import KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
@@ -22,7 +22,7 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-kfs = [KalmanFilter3D() for _ in range(skel_len)]
+kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +51,16 @@ def merging(dtrs, dts):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    n_devices = 3
+    global n_devices
+    arg1 = sys.argv[1] if len(sys.argv) > 1 else None
+    if arg1 is None:
+        raise ValueError("No argument provided. Enter the number of cameras")   
+    else:
+        try:
+            n_devices = int(arg1)  
+        except:
+            raise ValueError(f"Wrong argument: {arg1}")
+        
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
     print("Merging started correctly\n")

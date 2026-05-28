@@ -16,7 +16,7 @@ of the skeleton, according to the following keypoint convention:
 import webbrowser
 import threading
 import numpy as np
-import time
+import sys
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from utils.data_transmitter import DataTransmitter
@@ -104,8 +104,16 @@ def index():
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global dtrs
-    n_devices = 1
+    global dtrs, n_devices
+    arg1 = sys.argv[1] if len(sys.argv) > 1 else None
+    if arg1 is None:
+        raise ValueError("No argument provided. Enter the number of cameras")   
+    else:
+        try:
+            n_devices = int(arg1)  
+        except:
+            raise ValueError(f"Wrong argument: {arg1}")
+        
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
 

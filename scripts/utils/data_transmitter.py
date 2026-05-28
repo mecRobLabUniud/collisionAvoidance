@@ -60,7 +60,6 @@ class SharedMemoryManager:
             pass
 
     def shutdown(self):
-        """close() + unlink() in one call."""
         self.close()
         self.unlink()
 
@@ -102,11 +101,11 @@ class SharedMemoryManager:
         attached = False
         while not attached:
             try:
-                shm = shared_memory.SharedMemory(name=self.name, create=False, size=0)
+                shm = shared_memory.SharedMemory(name=self.name, create=False, size=self.size)
                 self._suppress_tracker(shm)
                 attached = True
-            except FileNotFoundError:
-                time.sleep(0.01)        
+            except (ValueError, FileNotFoundError):
+                time.sleep(0.01)
         return shm
 
     @staticmethod
@@ -251,4 +250,4 @@ class DataTransmitter:
             self.socket = None
         if self.shm is not None:
             self.shm.shutdown()
-            self.shm = None    
+            self.shm = None
