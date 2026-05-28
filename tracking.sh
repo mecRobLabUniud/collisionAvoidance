@@ -10,7 +10,7 @@ echo $mode
 echo $use_gui
 echo $n_devices
 
-trap 'kill 0' INT
+# trap 'kill 0' INT
 
 camera_stream="python3 scripts/camera_stream.py"
 data_recording="python3 scripts/data_recording.py"
@@ -27,19 +27,28 @@ web_interface="python3 scripts/web_interface.py"
 
 if [ "$mode" == "--tracking" ]; then
     echo "Starting tracking procedure..."
-    $camera_stream &
     $data_merging & 
+    sleep 0.1
+    $camera_stream &
     if [ "$use_gui" == "--gui" ]; then
         sleep 1
         $web_interface
+        pgrep -f "$web_interface" | xargs kill
     else
         wait
     fi
+    pgrep -f "$data_merging" | xargs kill
+    pgrep -f "$camera_stream" | xargs kill
+
 elif [ "$mode" == "--recording" ]; then
     echo "Starting recording procedure..."
-    $camera_stream &
     $data_recording "-r" &
+    sleep 0.1
+    $camera_stream &
     wait
+    pgrep -f "$camera_stream" | xargs kill
+    pgrep -f "$data_recording" | xargs kill
+
 elif [ "$mode" == "--streaming" ]; then
     echo "Starting streaming procedure..."
     $data_recording "-s" &
@@ -47,9 +56,12 @@ elif [ "$mode" == "--streaming" ]; then
     if [ "$use_gui" == "--gui" ]; then
         sleep 1
         $web_interface
+        pgrep -f "$web_interface" | xargs kill
     else
         wait
     fi
+    pgrep -f "$data_recording" | xargs kill
+    pgrep -f "$data_merging" | xargs kill
 fi
 
 # pgrep -f "$web_interface" | xargs kill

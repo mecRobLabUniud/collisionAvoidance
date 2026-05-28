@@ -9,7 +9,8 @@
 import cv2
 import zmq
 import json
-import threading
+import sys
+import warnings
 import time
 import base64
 import numpy as np
@@ -90,7 +91,7 @@ class SharedMemoryManager:
             return shared_memory.SharedMemory(name=self.name, create=True, size=self.size)
         except FileExistsError:
             try:
-                stale = shared_memory.SharedMemory(name=self.name, create=False, size=self.size)
+                stale = shared_memory.SharedMemory(name=self.name, create=False, size=0)
                 stale.close()
                 stale.unlink()
             except Exception:
@@ -101,7 +102,7 @@ class SharedMemoryManager:
         attached = False
         while not attached:
             try:
-                shm = shared_memory.SharedMemory(name=self.name, create=False, size=self.size)
+                shm = shared_memory.SharedMemory(name=self.name, create=False, size=0)
                 self._suppress_tracker(shm)
                 attached = True
             except FileNotFoundError:
@@ -110,11 +111,18 @@ class SharedMemoryManager:
 
     @staticmethod
     def _suppress_tracker(shm: shared_memory.SharedMemory):
-        for name in (shm.name, f"/{shm.name}"):
+        if sys.version_info >= (3, 9):
             try:
-                rt.unregister(name, "shared_memory")
-            except (KeyError, Exception):
+                rt.unregister(f"/{shm.name}", "shared_memory")
+            except Exception:
                 pass
+        else:
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=".*resource_tracker.*leaked.*shared_memory.*",
+                module="multiprocessing.resource_tracker",
+            )
 
     
     # ── Properties ───────────────────────────────────────────────────────────────
