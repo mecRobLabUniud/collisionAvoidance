@@ -30,6 +30,7 @@ kfs = [KalmanFilter3D() for _ in range(skel_len)]
 # ─────────────────────────────────────────────────────────────────────────────
 # @set_rate(60)
 @chronometer
+@set_rate(60)
 def merging(dtrs, dts):
     skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
     confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
@@ -43,12 +44,14 @@ def merging(dtrs, dts):
     merged_confidence = np.ones(skel_len).astype(np.float32)
     dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
 
+    # time.sleep(0.016)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    n_devices = 2
+    n_devices = 3
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
     print("Merging started correctly\n")

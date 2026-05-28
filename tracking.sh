@@ -2,11 +2,13 @@
 
 mode=$1
 use_gui=$2
+n_devices=lsusb | grep 8086 | wc -l
 
 # trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
 echo $mode
 echo $use_gui
+echo $n_devices
 
 trap 'kill 0' INT
 
@@ -35,6 +37,9 @@ if [ "$mode" == "--tracking" ]; then
     fi
 elif [ "$mode" == "--recording" ]; then
     echo "Starting recording procedure..."
+    $camera_stream &
+    $data_recording "-r" &
+    wait
 elif [ "$mode" == "--streaming" ]; then
     echo "Starting streaming procedure..."
     $data_recording "-s" &

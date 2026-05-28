@@ -102,7 +102,7 @@ class SharedMemoryManager:
         while not attached:
             try:
                 shm = shared_memory.SharedMemory(name=self.name, create=False, size=self.size)
-                # self._suppress_tracker(shm)
+                self._suppress_tracker(shm)
                 attached = True
             except FileNotFoundError:
                 time.sleep(0.01)        

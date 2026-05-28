@@ -79,7 +79,7 @@ def main():
         rotation_matrices = []
         for marker_ID in marker_IDs:
             serial = device.get_info(rs.camera_info.serial_number)
-            rotation_matrix = mark.calibration(marker_ID)
+            rotation_matrix = mark.static_calibration(marker_ID)
             if not rotation_matrix is None:
                 rotation_matrices.append(rotation_matrix)
 

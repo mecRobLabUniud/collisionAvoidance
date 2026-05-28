@@ -61,11 +61,6 @@ def listen_for_input():
 # Recording
 # ─────────────────────────────────────────────────────────────────────────────
 def record_data(dtrs, skeleton_data_writers, color_writers):
-    global frame_id
-
-    # skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
-    # confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
-
     for dtr, skeleton_data_writer, color_writer in zip(dtrs, skeleton_data_writers, color_writers):
         skeleton_data_packed = dtr.receive_packed_skeleton_data()
 
@@ -74,10 +69,7 @@ def record_data(dtrs, skeleton_data_writers, color_writers):
 
         raw_frame = dtr.receive_raw_frames()
         color_writer.write(raw_frame)
-        print(raw_frame.shape)
-
-        # write_frame(frames_bin[n], frames_idx[n], frame)
-        # frame_id += 1
+        print("Acquiring...", end="\r")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,7 +91,6 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
             confidence = np.array(json.loads(confidence_packed))
             dts.send_skeleton_data(skeleton, confidence)
 
-        #with open(color_reader, "r") as file:
         ret, frame = color_reader.read()
         if ret:
             dts.send_frames(frame)
@@ -117,46 +108,50 @@ def main():
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     # Start input listener in background thread
-    input_thread = threading.Thread(target=listen_for_input, daemon=True)
-    input_thread.start()
+    # input_thread = threading.Thread(target=listen_for_input, daemon=True)
+    # input_thread.start()
 
-    # Clear shutdown logic
-    def signal_handler(sig, frame):
-        global running
-        running = False
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # # Clear shutdown logic
+    # def signal_handler(sig, frame):
+    #     global running
+    #     running = False
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTERM, signal_handler)
+
+
+    skeleton_data_dir = os.path.join(data_dir, f"skeleton_data")
+    media_dir = os.path.join(data_dir, f"media")
+    n_test_skeleton_data = max([int(directory[4:]) for directory in list(os.walk(skeleton_data_dir))[0][1]])
+    n_test_media = max([int(directory[4:]) for directory in list(os.walk(media_dir))[0][1]])
+    n_test = max(n_test_skeleton_data, n_test_media)
+
+    skeleton_data_test_dir = os.path.join(skeleton_data_dir, f"test{n_test+1}")
+    media_test_dir = os.path.join(media_dir, f"test{n_test+1}")
+    os.makedirs(skeleton_data_test_dir, exist_ok=True)  
+    os.makedirs(media_test_dir, exist_ok=True)       
 
     if arg is None:
         raise ValueError("No argument provided. Use --record or --stream.")
 
     if arg in ["--record", "-r"]:
         while True:
-            res = input("\nRecorded data are already present in the working directory. Do you want to overwrite them? (y/n)\n")
-            if res == "y":
-                print("Recording mode enabled. Press Ctrl+C to stop.")
-                dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-                skeleton_data_writers = [os.path.join(data_dir, f"skeleton_data/skeleton_{n}.txt") for n in range(int(n_devices))]
-                [open(skeleton_data_writer, "w") for skeleton_data_writer in skeleton_data_writers]
-                color_writers = [VideoRecorder(os.path.join(data_dir, f"media/color_{n}.avi"), "XVID", 100, (848, 480), is_color=True) for n in range(n_devices)]
-                while running:
-                    record_data(dtrs, skeleton_data_writers, color_writers)
-                    time.sleep(0.01)
-                for dtr, color_writer in zip(dtrs, color_writers):
-                    dtr.shutdown()
-                    color_writer.release()
-            if res == "n":
-                break
-            else:
-                print("Unknown answer")
-                continue
+            dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
+            skeleton_data_writers = [os.path.join(skeleton_data_test_dir, f"skeleton_{n}.txt") for n in range(int(n_devices))]
+            [open(skeleton_data_writer, "w") for skeleton_data_writer in skeleton_data_writers]
+            color_writers = [VideoRecorder(os.path.join(media_test_dir, f"color_{n}.avi"), "XVID", 60, (848, 480), is_color=True) for n in range(n_devices)]
+            print("Recording mode enabled. Press Ctrl+C to stop.")
+            while running:
+                record_data(dtrs, skeleton_data_writers, color_writers)
+                time.sleep(0.016)
+            for dtr, color_writer in zip(dtrs, color_writers):
+                dtr.shutdown()
+                color_writer.release()
 
     elif arg in ["--stream", "-s"]:
-        print("Streaming mode enabled. Press Ctrl+C to stop.")
         dtss = [DataTransmitter("sender", n, "SINGLE_CAMERA") for n in range(n_devices)]
-        skeleton_data_readers = [os.path.join(data_dir, f"skeleton_data/skeleton_{n}.txt") for n in range(int(n_devices))]
-        color_readers = [cv2.VideoCapture(os.path.join(data_dir, f"media/color_{n}.avi")) for n in range(n_devices)]
-        time.sleep(1)
+        skeleton_data_readers = [os.path.join(skeleton_data_test_dir, f"skeleton_{n}.txt") for n in range(int(n_devices))]
+        color_readers = [cv2.VideoCapture(os.path.join(media_test_dir, f"color_{n}.avi")) for n in range(n_devices)]
+        print("Streaming mode enabled. Press Ctrl+C to stop.")
         try:
             while running:
                 if not paused:
@@ -164,17 +159,15 @@ def main():
                     if res == "reset":
                         color_readers = [cv2.VideoCapture(os.path.join(data_dir, f"media/color_{n}.avi")) for n in range(n_devices)]
                         stream_cnt = 0
-                    time.sleep(0.01)
+                    time.sleep(0.016)
                 else:
-                    time.sleep(0.01)                
+                    time.sleep(0.016)                
         finally:
             for dts in dtss:
                 dts.shutdown()
 
     else:
         raise ValueError(f"Unknown argument: {arg}")
-
-    quit()
 
 
 if __name__ == "__main__":

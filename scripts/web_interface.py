@@ -41,52 +41,56 @@ topic = "SKEL"
 # ─────────────────────────────────────────────────────────────────────────────
 # Skeleton thread 
 # ─────────────────────────────────────────────────────────────────────────────
-# @set_rate(60)
 @chronometer
+@set_rate(60)
+def send_skeleton_data():
+    try:
+        merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+        x = [pnt[0] for pnt in merged_skeleton]
+        y = [pnt[1] for pnt in merged_skeleton]
+        z = [pnt[2] for pnt in merged_skeleton]
+        x_data =[]
+        y_data =[]
+        z_data =[]
+        for (a, b) in EDGES:
+            x_data.append(x[a] if not np.isnan(x[a]) else None)
+            x_data.append(x[b] if not np.isnan(x[b]) else None)
+            x_data.append(None)
+            y_data.append(y[a] if not np.isnan(y[a]) else None)
+            y_data.append(y[b] if not np.isnan(y[b]) else None)
+            y_data.append(None)
+            z_data.append(z[a] if not np.isnan(z[a]) else None)
+            z_data.append(z[b] if not np.isnan(z[b]) else None)
+            z_data.append(None)
+
+        msg = {"x": x_data, "y": y_data, "z": z_data}
+        socketio.emit("update_plot", msg)
+        
+    except Exception as e:
+        print(f"Skeleton thread error: {e}")
+
 def skeleton_thread():
     while True:
-        try:
-            merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
-            x = [pnt[0] for pnt in merged_skeleton]
-            y = [pnt[1] for pnt in merged_skeleton]
-            z = [pnt[2] for pnt in merged_skeleton]
-            x_data =[]
-            y_data =[]
-            z_data =[]
-            for (a, b) in EDGES:
-                x_data.append(x[a] if not np.isnan(x[a]) else None)
-                x_data.append(x[b] if not np.isnan(x[b]) else None)
-                x_data.append(None)
-                y_data.append(y[a] if not np.isnan(y[a]) else None)
-                y_data.append(y[b] if not np.isnan(y[b]) else None)
-                y_data.append(None)
-                z_data.append(z[a] if not np.isnan(z[a]) else None)
-                z_data.append(z[b] if not np.isnan(z[b]) else None)
-                z_data.append(None)
-
-            msg = {"x": x_data, "y": y_data, "z": z_data}
-            socketio.emit("update_plot", msg)
-            
-        except Exception as e:
-            print(f"Skeleton thread error: {e}")
-        time.sleep(0.016) 
+        send_skeleton_data()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame thread
 # ─────────────────────────────────────────────────────────────────────────────
-# @set_rate(60)
 @chronometer
+@set_rate(60)
+def send_frames():
+    try:
+        frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
+        for n, frame in enumerate(frames):
+            socketio.emit(f"update_stream{n+1}", {"frame": frame})
+    except Exception as e:
+        print(f"Image thread error: {e}")
+
 def frame_thread():
     while True:
-        try:
-            frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
-            for n, frame in enumerate(frames):
-                socketio.emit(f"update_stream{n+1}", {"frame": frame})
-        except Exception as e:
-            print(f"Image thread error: {e}")
-        time.sleep(0.016)
-
+        send_frames()
+        
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Web interface route
@@ -101,7 +105,7 @@ def index():
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     global dtrs
-    n_devices = 2
+    n_devices = 1
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
 
