@@ -15,6 +15,7 @@ The script supports multiple cameras and can save video output for debugging.
 import signal
 import os
 import numpy as np
+import time
 import logging
 import pyrealsense2 as rs
 from ultralytics import YOLO
@@ -58,7 +59,7 @@ def transform_points(T, pts_skeleton):
 def tracking(dtss, trackers, rotation_matrices):    
     for n, (dts, tracker, rotation_matrix) in enumerate(zip(dtss, trackers, rotation_matrices)):
         frame = tracker.read_frame()
-        skeleton, confidence = tracker.read_coords()      
+        skeleton, confidence = tracker.read_coords()    
 
         # Write frame into shared memory
         if not frame is None:
@@ -107,7 +108,9 @@ def main():
 
     # Main loop
     while running:
+        t0 = time.time()
         tracking(dtss, trackers, rotation_matrices)
+        print(f"Tracking time: {time.time() - t0:.4f} seconds")
 
     for (dts, tracker) in zip(dtss, trackers):
         dts.shutdown()

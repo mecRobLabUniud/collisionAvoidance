@@ -12,6 +12,22 @@ using a 3-D or 6-D Kalman filter with multi-sensor sequential updates.
 import numpy as np
 
 
+
+
+class SimpleMerger:
+    def __init__(self):
+        pass
+
+    # Main loop for predicting and updating the filter with new measurements
+    def step(self, measurement, confidence):
+        merge = []
+        for meas in zip(*measurement):
+            merge.append(sum(m*c for m, c in zip(meas, confidence))/(sum(confidence)))
+        
+        return np.array(merge) if len(measurement) > 0 else np.array([np.nan, np.nan, np.nan])
+    
+
+
 class KalmanFilter3D:
     def __init__(self):
         self.maha_thr = 9.0

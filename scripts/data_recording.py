@@ -20,6 +20,7 @@ import multiprocessing.resource_tracker as rt
 from multiprocessing import shared_memory
 from utils.data_transmitter import DataTransmitter
 from utils.video_recorder import VideoRecorder
+from utils.decorators import chronometer, set_rate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
@@ -39,6 +40,7 @@ paused = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(script_dir, "data")
 os.makedirs(data_dir, exist_ok=True)
+t0 = time.time()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,7 +67,7 @@ def record_data(dtrs, skeleton_data_writers, color_writers):
         skeleton_data_packed = dtr.receive_packed_skeleton_data()
 
         with open(skeleton_data_writer, "a") as file:
-            file.write(skeleton_data_packed + "\n")
+            file.write(f"{time.time()-t0}; {skeleton_data_packed}\n")
 
         raw_frame = dtr.receive_raw_frames()
         color_writer.write(raw_frame)
@@ -75,9 +77,9 @@ def record_data(dtrs, skeleton_data_writers, color_writers):
 # ─────────────────────────────────────────────────────────────────────────────
 # Streaming
 # ─────────────────────────────────────────────────────────────────────────────
+@set_rate(60)
 def stream_data(dtss, skeleton_data_readers, color_readers):
     global stream_cnt
-
     for dts, skeleton_data_reader, color_reader in zip(dtss, skeleton_data_readers, color_readers):
         with open(skeleton_data_reader, "r") as file:
             lines = file.readlines()
@@ -86,7 +88,7 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
                 return "reset"
             skeleton_data_packed = lines[stream_cnt]
 
-            _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 2)
+            time, _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 3)
             skeleton = np.array(json.loads(skeleton_packed))
             confidence = np.array(json.loads(confidence_packed))
             dts.send_skeleton_data(skeleton, confidence)
@@ -121,8 +123,8 @@ def main():
 
     skeleton_data_dir = os.path.join(data_dir, f"skeleton_data")
     media_dir = os.path.join(data_dir, f"media")
-    n_test_skeleton_data = max([int(directory[4:]) for directory in list(os.walk(skeleton_data_dir))[0][1]])
-    n_test_media = max([int(directory[4:]) for directory in list(os.walk(media_dir))[0][1]])
+    n_test_skeleton_data = max([int(directory[4:]) for directory in list(os.walk(skeleton_data_dir))[0][1]]) if not list(os.walk(skeleton_data_dir))[0][1] == [] else 0
+    n_test_media = max([int(directory[4:]) for directory in list(os.walk(media_dir))[0][1]]) if not list(os.walk(media_dir))[0][1] == [] else 0
     n_test = max(n_test_skeleton_data, n_test_media)
 
     if arg1 is None:
@@ -177,7 +179,7 @@ def main():
                     if res == "reset":
                         color_readers = [cv2.VideoCapture(os.path.join(media_test_dir, f"color_{n}.avi")) for n in range(n_devices)]
                         stream_cnt = 0
-                    time.sleep(0.016)
+                    # time.sleep(0.016)
                 else:
                     time.sleep(0.016)                
         finally:
