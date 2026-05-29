@@ -76,27 +76,33 @@ def main():
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), 1920, 1080, 30, False)
         mark = MarkerDetector(tracker)
 
-        rotation_matrices = []
-        for marker_ID in marker_IDs:
-            serial = device.get_info(rs.camera_info.serial_number)
-            rotation_matrix = mark.simple_calibration(marker_ID) # static_calibration(marker_ID)
-            if not rotation_matrix is None:
-                rotation_matrices.append(rotation_matrix)
+        rotation_matrix = mark.simple_calibration(34)
+        serial = device.get_info(rs.camera_info.serial_number)
+        save_file = os.path.join(data_dir, f"calibration/pose_{serial}.txt")
+        matrix = correct_rotation_matrix(rotation_matrix)
+        write_rotation_matrix_to_file(save_file, matrix)
 
-        if len(rotation_matrices) == 0:
-            print(f"Calibration failed for device {i} (SN: {serial}). No marker detected.")
-            return
-        elif len(rotation_matrices) > 0 and len(rotation_matrices) <= len(marker_IDs):
-            avg_rotation_matrix = np.mean([rotation_matrix for rotation_matrix in rotation_matrices], axis=0)
-
-            print(f"Media: {avg_rotation_matrix}")
-            matrix = correct_rotation_matrix(avg_rotation_matrix)
-
-            print(f"Finl: {matrix}")
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            save_file = os.path.join(data_dir, f"calibration/pose_{serial}.txt")
-            write_rotation_matrix_to_file(save_file, matrix)
+        # rotation_matrices = []
+        # for marker_ID in marker_IDs:
+        #     serial = device.get_info(rs.camera_info.serial_number)
+        #     rotation_matrix = mark.static_calibration(marker_ID)
+        #     if not rotation_matrix is None:
+        #         rotation_matrices.append(rotation_matrix)
+# 
+        # if len(rotation_matrices) == 0:
+        #     print(f"Calibration failed for device {i} (SN: {serial}). No marker detected.")
+        #     return
+        # elif len(rotation_matrices) > 0 and len(rotation_matrices) <= len(marker_IDs):
+        #     avg_rotation_matrix = np.mean([rotation_matrix for rotation_matrix in rotation_matrices], axis=0)
+# 
+        #     print(f"Media: {avg_rotation_matrix}")
+        #     matrix = correct_rotation_matrix(avg_rotation_matrix)
+# 
+        #     print(f"Finl: {matrix}")
+# 
+        #     script_dir = os.path.dirname(os.path.abspath(__file__))
+        #     save_file = os.path.join(data_dir, f"calibration/pose_{serial}.txt")
+        #     write_rotation_matrix_to_file(save_file, matrix)
 
     print(f"Calibration ended correctly. Marker was detected by all the devices.")
 
