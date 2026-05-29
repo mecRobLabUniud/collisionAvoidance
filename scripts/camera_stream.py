@@ -56,6 +56,7 @@ def transform_points(T, pts_skeleton):
 # ─────────────────────────────────────────────────────────────────────────────
 # Skeleton tracking
 # ─────────────────────────────────────────────────────────────────────────────
+@set_rate(60)
 def tracking(dtss, trackers, rotation_matrices):    
     for n, (dts, tracker, rotation_matrix) in enumerate(zip(dtss, trackers, rotation_matrices)):
         frame = tracker.read_frame()
@@ -108,9 +109,7 @@ def main():
 
     # Main loop
     while running:
-        t0 = time.time()
         tracking(dtss, trackers, rotation_matrices)
-        print(f"Tracking time: {time.time() - t0:.4f} seconds")
 
     for (dts, tracker) in zip(dtss, trackers):
         dts.shutdown()

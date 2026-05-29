@@ -62,6 +62,7 @@ def listen_for_input():
 # ─────────────────────────────────────────────────────────────────────────────
 # Recording
 # ─────────────────────────────────────────────────────────────────────────────
+@set_rate(60)
 def record_data(dtrs, skeleton_data_writers, color_writers):
     for dtr, skeleton_data_writer, color_writer in zip(dtrs, skeleton_data_writers, color_writers):
         skeleton_data_packed = dtr.receive_packed_skeleton_data()
@@ -84,7 +85,6 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
         with open(skeleton_data_reader, "r") as file:
             lines = file.readlines()
             if stream_cnt >= len(lines):
-                print(f"[stream_data] no more skeleton lines")
                 return "reset"
             skeleton_data_packed = lines[stream_cnt]
 
@@ -151,7 +151,6 @@ def main():
         print("Recording mode enabled. Press Ctrl+C to stop.")
         while running:
             record_data(dtrs, skeleton_data_writers, color_writers)
-            time.sleep(0.016)
         for dtr, color_writer in zip(dtrs, color_writers):
             dtr.shutdown()
             color_writer.release()
@@ -179,7 +178,6 @@ def main():
                     if res == "reset":
                         color_readers = [cv2.VideoCapture(os.path.join(media_test_dir, f"color_{n}.avi")) for n in range(n_devices)]
                         stream_cnt = 0
-                    # time.sleep(0.016)
                 else:
                     time.sleep(0.016)                
         finally:

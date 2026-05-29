@@ -41,11 +41,10 @@ topic = "SKEL"
 # ─────────────────────────────────────────────────────────────────────────────
 # Skeleton thread 
 # ─────────────────────────────────────────────────────────────────────────────
-# @chronometer
-@set_rate(60)
+@set_rate(30)
 def send_skeleton_data():
     try:
-        merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+        merged_skeleton = dtrs[1].receive_skeleton_data()[0]
         x = [pnt[0] for pnt in merged_skeleton]
         y = [pnt[1] for pnt in merged_skeleton]
         z = [pnt[2] for pnt in merged_skeleton]
@@ -65,6 +64,27 @@ def send_skeleton_data():
 
         msg = {"x": x_data, "y": y_data, "z": z_data}
         socketio.emit("update_plot", msg)
+
+        merged_skeleton = dtrs[0].receive_skeleton_data()[0]
+        x = [pnt[0] for pnt in merged_skeleton]
+        y = [pnt[1] for pnt in merged_skeleton]
+        z = [pnt[2] for pnt in merged_skeleton]
+        x_data =[]
+        y_data =[]
+        z_data =[]
+        for (a, b) in EDGES:
+            x_data.append(x[a] if not np.isnan(x[a]) else None)
+            x_data.append(x[b] if not np.isnan(x[b]) else None)
+            x_data.append(None)
+            y_data.append(y[a] if not np.isnan(y[a]) else None)
+            y_data.append(y[b] if not np.isnan(y[b]) else None)
+            y_data.append(None)
+            z_data.append(z[a] if not np.isnan(z[a]) else None)
+            z_data.append(z[b] if not np.isnan(z[b]) else None)
+            z_data.append(None)
+
+        msg = {"x": x_data, "y": y_data, "z": z_data}
+        socketio.emit("update_plot1", msg)
         
     except Exception as e:
         print(f"Skeleton thread error: {e}")
@@ -77,8 +97,7 @@ def skeleton_thread():
 # ─────────────────────────────────────────────────────────────────────────────
 # Frame thread
 # ─────────────────────────────────────────────────────────────────────────────
-# @chronometer
-@set_rate(60)
+@set_rate(30)
 def send_frames():
     try:
         frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]

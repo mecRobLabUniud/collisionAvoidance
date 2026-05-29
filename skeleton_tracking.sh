@@ -41,7 +41,6 @@ elif [ "$mode" == "--streaming" ]; then
     read n_test
 
     n_devices=$(ls scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
-    echo $n_devices
 
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &

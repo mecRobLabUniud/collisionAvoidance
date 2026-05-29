@@ -22,8 +22,7 @@ class SimpleMerger:
     def step(self, measurement, confidence):
         merge = []
         for meas in zip(*measurement):
-            merge.append(sum(m*c for m, c in zip(meas, confidence))/(sum(confidence)))
-        
+            merge.append(sum(m*c for m, c in zip(meas, confidence)if not np.isnan(m))/(sum(confidence)))
         return np.array(merge) if len(measurement) > 0 else np.array([np.nan, np.nan, np.nan])
     
 

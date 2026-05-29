@@ -23,14 +23,13 @@ topic = "SKEL"
 interfaces = None
 n_devices = 0
 skel_len = 17
-kfs = [KalmanFilter3D() for _ in range(skel_len)]
+kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Merging
 # ─────────────────────────────────────────────────────────────────────────────
-# @chronometer
-# @set_rate(60)
+@set_rate(60)
 def merging(dtrs, dts):
     # skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
     # confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
@@ -51,7 +50,6 @@ def merging(dtrs, dts):
         confidence_marker = [confidence[i] for confidence in confidences if not confidence==None]
         merged_skeleton.append(kfs[i].step(skeleton_marker, confidence_marker).tolist())
     
-
     merged_confidence = np.ones(skel_len).astype(np.float32)
     dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
 
