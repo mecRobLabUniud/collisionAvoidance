@@ -10,6 +10,7 @@ camera_stream="python3 scripts/camera_stream.py"
 data_recording="python3 scripts/data_recording.py"
 data_merging="python3 scripts/data_merging.py"
 web_interface="python3 scripts/web_interface.py"
+calibration="python3 scripts/calibration.py"
 
 if [ "$mode" == "--tracking" ]; then
     echo "Starting tracking procedure..."
@@ -39,6 +40,9 @@ elif [ "$mode" == "--streaming" ]; then
     echo -n "Enter the value of the test to stream: "
     read n_test
 
+    n_devices=$(ls scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
+    echo $n_devices
+
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &
     $data_merging "$n_devices" &
@@ -51,5 +55,8 @@ elif [ "$mode" == "--streaming" ]; then
     fi
     # pgrep -f "$data_recording" | xargs kill
     # pgrep -f "$data_merging" | xargs kill
+
+elif [ "$mode" == "--calibration" ]; then
+    $calibration
 fi
 

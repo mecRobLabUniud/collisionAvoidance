@@ -30,7 +30,7 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # ─────────────────────────────────────────────────────────────────────────────
 # @set_rate(60)
 @chronometer
-@set_rate(60)
+# @set_rate(60)
 def merging(dtrs, dts):
     skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
     confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
