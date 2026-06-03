@@ -12,7 +12,7 @@ data_merging="python3 scripts/data_merging.py"
 web_interface="python3 scripts/web_interface.py"
 calibration="python3 scripts/calibration.py"
 
-if [ "$mode" == "--tracking" ]; then
+if [ "$mode" == "--track" ]; then
     echo "Starting tracking procedure..."
     $data_merging "$n_devices" &
     sleep 0.1
@@ -27,7 +27,7 @@ if [ "$mode" == "--tracking" ]; then
     # pgrep -f "$data_merging" | xargs kill
     # pgrep -f "$camera_stream" | xargs kill
 
-elif [ "$mode" == "--recording" ]; then
+elif [ "$mode" == "--record" ]; then
     echo "Starting recording procedure..."
     $data_recording "$n_devices" "-r" &
     sleep 0.1
@@ -36,7 +36,7 @@ elif [ "$mode" == "--recording" ]; then
     # pgrep -f "$camera_stream" | xargs kill
     # pgrep -f "$data_recording" | xargs kill
 
-elif [ "$mode" == "--streaming" ]; then
+elif [ "$mode" == "--stream" ]; then
     echo -n "Enter the value of the test to stream: "
     read n_test
 
@@ -55,7 +55,7 @@ elif [ "$mode" == "--streaming" ]; then
     # pgrep -f "$data_recording" | xargs kill
     # pgrep -f "$data_merging" | xargs kill
 
-elif [ "$mode" == "--calibration" ]; then
+elif [ "$mode" == "--calibrate" ]; then
     $calibration
 fi
 

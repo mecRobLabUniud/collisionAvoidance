@@ -95,44 +95,7 @@
             });
         }
 
-        setTimeout(update_plot, 0.0167);
-
-
-
-        function update_plot1() {
-            socket.on('update_plot1', function(point) {
-                const trace = {
-                    x: point.x,
-                    y: point.y,
-                    z: point.z,
-                    mode: 'markers+lines',
-                    marker: {
-                        color: 'rgb(127, 127, 127)',
-                        size: 10,
-                        symbol: 'circle',
-                        opacity: 0.8},
-                    line: {
-                        color: 'rgb(104, 104, 204)',
-                        width: 5,
-                        opacity: 0.8},
-                    type: 'scatter3d'};
-
-                Plotly.addTraces('plot', [trace]);
-
-                var newTrace = {
-                    type: 'scatter3d',
-                    x: [0],
-                    y: [0],
-                    z: [0],
-                    mode: 'markers'
-                };
-
-                Plotly.addTraces('plot', newTrace);
-            });
-        }
-
-        setTimeout(update_plot1, 0.0167);
-
+        setTimeout(update_plot, 1/30 * 1000);
 
 
         // ─────────────────────────────────────────────────────────────────────────────

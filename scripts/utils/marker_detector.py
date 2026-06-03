@@ -190,7 +190,7 @@ class MarkerDetector:
                 axis = np.float32([[-0.01, -0.01, 0], [-0.01, 0.01, 0], [0.01, -0.01, 0], [0.01, 0.01, 0]]).reshape(-1, 3)
 
                 # Estimate pose of each marker
-                if ids[0] == 34:
+                if ids[0] == marker_ID:
                     rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners[0], self.single_dim, self.matrix_coefficients, self.distortion_coefficients)
                     
                     # Build 4x4 pose matrix [R | t; 0 0 0 1]
@@ -198,7 +198,7 @@ class MarkerDetector:
                     rotation_matrix = np.eye(4, dtype=np.float32)
                     rotation_matrix[:3, :3] = R_mat  # Rotation part
                     rotation_matrix[:3, 3] = tvec.flatten()  # Translation part
-                    # rotation_matrix = np.dot(transformations[marker_IDs.index(marker_ID)], np.linalg.inv(rotation_matrix))
+                    rotation_matrix = np.linalg.inv(rotation_matrix)
 
                     aruco.drawDetectedMarkers(frame, corners)  # Draw A square around the markers
                     imgpts, jac = cv2.projectPoints(axis, rvec, tvec, self.matrix_coefficients,
