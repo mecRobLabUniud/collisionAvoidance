@@ -80,7 +80,7 @@ def tracking(dtss, trackers, rotation_matrices):
 def main():
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
-    model = YOLO(os.path.join(script_dir, f"../models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
+    model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
     dtss = []
     trackers = []
     rotation_matrices = []
