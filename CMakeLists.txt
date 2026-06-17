@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(CollisionAvoidance CXX)
 
 # Richiesto C++14 per libfranka e Pinocchio
@@ -25,16 +25,19 @@ include_directories(
 )
 
 # --- ESEGUIBILE ---
-add_executable(robot_control
-    src/robot_control.cpp
-    src/examples_common.cpp
-)
+add_executable(robot_control src/robot_control.cpp src/examples_common.cpp)
+target_link_libraries(robot_control PRIVATE Franka::Franka Eigen3::Eigen ${ZMQ_LIBRARIES} Threads::Threads)
 
-target_link_libraries(robot_control PRIVATE
-    Franka::Franka
-    Eigen3::Eigen
-    ${ZMQ_LIBRARIES}
-    Threads::Threads
-    # casadi
-    # pinocchio::pinocchio
-)
+add_executable(trajectory_interpolation src/trajectory_interpolation.cpp)
+target_link_libraries(trajectory_interpolation PRIVATE Eigen3::Eigen)
+# target_compile_options(trajectory_interpolation PRIVATE -O2)
+
+add_executable(joint_point_to_point_motion src/joint_point_to_point_motion.cpp src/examples_common.cpp)
+target_link_libraries(joint_point_to_point_motion PRIVATE Franka::Franka Eigen3::Eigen)
+
+add_executable(record_trajectory src/record_trajectory.cpp)
+target_link_libraries(record_trajectory PRIVATE Franka::Franka Eigen3::Eigen Threads::Threads)
+
+add_executable(replay_trajectory src/replay_trajectory.cpp src/examples_common.cpp)
+target_link_libraries(replay_trajectory PRIVATE Franka::Franka Eigen3::Eigen)
+

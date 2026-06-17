@@ -6,11 +6,13 @@ n_devices=$(lsusb | grep 8086 | wc -l)
 
 trap 'kill 0' INT
 
-camera_stream="python3 scripts/camera_stream.py"
-data_recording="python3 scripts/data_recording.py"
-data_merging="python3 scripts/data_merging.py"
-web_interface="python3 scripts/web_interface.py"
-calibration="python3 scripts/calibration.py"
+dir="$(dirname $0)"
+
+camera_stream="python3 $dir/scripts/camera_stream.py"
+data_recording="python3 $dir/scripts/data_recording.py"
+data_merging="python3 $dir/scripts/data_merging.py"
+web_interface="python3 $dir/scripts/web_interface.py"
+calibration="python3 $dir/scripts/calibration.py"
 
 if [ "$mode" == "--track" ]; then
     echo "Starting tracking procedure..."
@@ -40,7 +42,7 @@ elif [ "$mode" == "--stream" ]; then
     echo -n "Enter the value of the test to stream: "
     read n_test
 
-    n_devices=$(ls scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
+    n_devices=$(ls $dir/scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
 
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &
