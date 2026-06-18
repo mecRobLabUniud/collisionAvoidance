@@ -4,7 +4,7 @@
 ░█▀▄░█▀█░▀█▀░█▀█░░░█▄█░█▀▀░█▀▄░█▀▀░▀█▀░█▀█░█▀▀
 ░█░█░█▀█░░█░░█▀█░░░█░█░█▀▀░█▀▄░█░█░░█░░█░█░█░█
 ░▀▀░░▀░▀░░▀░░▀░▀░░░▀░▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
-Merging and re-shaping the skeleton standard keypoint convention:
+Merging and re-shaping the skeleton according to the following keypoint convention:
 0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
 5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
 9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
