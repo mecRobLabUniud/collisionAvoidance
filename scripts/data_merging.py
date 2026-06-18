@@ -4,6 +4,11 @@
 ░█▀▄░█▀█░▀█▀░█▀█░░░█▄█░█▀▀░█▀▄░█▀▀░▀█▀░█▀█░█▀▀
 ░█░█░█▀█░░█░░█▀█░░░█░█░█▀▀░█▀▄░█░█░░█░░█░█░█░█
 ░▀▀░░▀░▀░░▀░░▀░▀░░░▀░▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
+Merging and re-shaping the skeleton according to the following keypoint convention:
+0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
+5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
+9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
+13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
 """
 
 import sys
@@ -24,6 +29,28 @@ interfaces = None
 n_devices = 0
 skel_len = 17
 kfs = [KalmanFilter6D() for _ in range(skel_len)]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Re-shaping skeleton structure
+# ─────────────────────────────────────────────────────────────────────────────
+def reshape_structure(skeleton):
+    new_skeleton = []
+    head_markers = [wp for wp in skeleton[0:5] if not np.isnan(wp[0])]
+    head = [[head_markers[i][j] for i in range(len(head_markers))] for j in range(3)]
+    new_skeleton.append([sum(head[i])/len(head[i]) if len(head[i])>0 else np.nan for i in range(3)])
+    for i in range(5, 11):
+        new_skeleton.append(skeleton[i]) 
+    upper_torso_markers = [wp for wp in skeleton[5:7] if not np.isnan(wp[0])]
+    lower_torso_markers = [wp for wp in skeleton[11:13] if not np.isnan(wp[0])]
+    upper_torso = [[upper_torso_markers[i][j] for i in range(len(upper_torso_markers))] for j in range(3)]
+    lower_torso = [[lower_torso_markers[i][j] for i in range(len(lower_torso_markers))] for j in range(3)]
+    new_skeleton.append([sum(upper_torso[i])/len(upper_torso[i]) if len(upper_torso[i])>0 else np.nan for i in range(3)])
+    new_skeleton.append([sum(lower_torso[i])/len(lower_torso[i]) if len(lower_torso[i])>0 else np.nan for i in range(3)])
+    for i in range(11, 17):
+        new_skeleton.append(skeleton[i]) 
+
+    new_skeleton = np.asanyarray(new_skeleton)
+    return new_skeleton
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -49,9 +76,10 @@ def merging(dtrs, dts):
         skeleton_marker = [skeleton[i] for skeleton in skeletons if not skeleton==None]
         confidence_marker = [confidence[i] for confidence in confidences if not confidence==None]
         merged_skeleton.append(kfs[i].step(skeleton_marker, confidence_marker).tolist())
-    
+
+    reshaped_skeleton = reshape_structure(merged_skeleton)    
     merged_confidence = np.ones(skel_len).astype(np.float32)
-    dts.send_skeleton_data(np.asanyarray(merged_skeleton), merged_confidence)
+    dts.send_skeleton_data(reshaped_skeleton, merged_confidence)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -71,7 +99,7 @@ def main():
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
     print("Merging started correctly\n")
-    
+
     # Main loop
     while running:
         merging(dtrs, dts)

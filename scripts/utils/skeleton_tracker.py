@@ -41,10 +41,6 @@ max_depth_range = 3.0   # Maximum depth range to consider for keypoint validatio
 running = True
 
 
-# color_writer = cv2.VideoWriter("color.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480))
-# depth_writer = cv2.VideoWriter("depth.avi", cv2.VideoWriter_fourcc(*'XVID'), 60, (848, 480), isColor=True)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Skeleton tracker using YOLOv8-Pose for keypoint detection
 # ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +58,7 @@ class SkeletonTracker:
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
-        self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.1, beta=1.0)
+        self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.01, beta=10.0)
         self.save_data = save
         
 
@@ -90,6 +86,9 @@ class SkeletonTracker:
         return pipe
 
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Start threads
+    # ─────────────────────────────────────────────────────────────────────────────
     def start(self, model):
         self.mutex = threading.Lock()
         if self.started:
@@ -103,6 +102,9 @@ class SkeletonTracker:
         return self
     
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # RGB and depth streaming from RealSense D435
+    # ─────────────────────────────────────────────────────────────────────────────
     def camera_streaming(self):
         last_frame_number = -1
         while running and self.started:
@@ -126,6 +128,9 @@ class SkeletonTracker:
                 self.depth = depth
 
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # skeleton tracking prediction
+    # ─────────────────────────────────────────────────────────────────────────────
     def skeleton_tracking(self, model):
         while running and self.started:
             if not self.depth or not self.color:
@@ -138,12 +143,11 @@ class SkeletonTracker:
             # Neural network inference
             color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
-
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
                 person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
                 xy = person[:, :2]
                 conf = person[:, 2]
-                xyz_cam = np.full((17, 3), np.nan, dtype=np.float32)
+                xyz = np.full((17, 3), np.nan, dtype=np.float32)
                 for k in TARGET_KEYPOINTS:
                     if conf[k] < conf_thr:
                         continue
@@ -157,11 +161,11 @@ class SkeletonTracker:
                     if not math.isfinite(z):
                         continue
                     X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
-                    xyz_cam[k] = np.array([X, Y, Z], dtype=np.float32)
+                    xyz[k] = np.array([X, Y, Z], dtype=np.float32)
 
                 # Temporal filter
                 with self.mutex:
-                    self.xyz = self.smoother.update(xyz_cam, conf, conf_thr)
+                    self.xyz = self.smoother.update(xyz, conf, conf_thr)
                     self.conf = conf
                     
                 # Image annotation for debugging
@@ -169,10 +173,10 @@ class SkeletonTracker:
                     if conf[u] >= conf_thr and conf[v] >= conf_thr:
                         pt1 = (int(xy[u, 0]), int(xy[u, 1]))
                         pt2 = (int(xy[v, 0]), int(xy[v, 1]))
-                        cv2.line(color_img, pt1, pt2, (0, 255, 0), 2)
+                        cv2.line(color_img, pt1, pt2, (200, 200, 200), 2)
                 for k in TARGET_KEYPOINTS:
                     if conf[k] >= conf_thr:
-                        cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 4, (0, 0, 255), -1)
+                        cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 5, (200, 200, 200), -1)
 
             with self.mutex:
                 self.frame = color_img.copy()
@@ -204,6 +208,9 @@ class SkeletonTracker:
         return zs[len(zs) // 2]
 
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Get methods
+    # ─────────────────────────────────────────────────────────────────────────────
     def get_aligned_frames(self):
         depth = None
         color = None
@@ -217,7 +224,6 @@ class SkeletonTracker:
         color = np.asanyarray(color.get_data()) 
         return depth, color
     
-
     def get_depth_frame(self):
         depth = None
         while depth is None:
@@ -227,7 +233,6 @@ class SkeletonTracker:
         depth = np.asanyarray(depth.get_data()) 
         return depth
     
-
     def get_color_frame(self):
         color = None
         while color is None:
@@ -237,10 +242,8 @@ class SkeletonTracker:
         color = np.asanyarray(color.get_data()) 
         return color
     
-
     def get_serial_number(self):
         return self.device
-    
 
     def get_intrinsics(self):
         color_stream = self.pipe.get_active_profile().get_stream(rs.stream.color)
@@ -254,18 +257,19 @@ class SkeletonTracker:
         return mtx, dist
 
 
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Read methods
+    # ─────────────────────────────────────────────────────────────────────────────
     def read_frame(self):
         with self.mutex:
             frame = self.frame.copy() if self.frame is not None else None
         return frame
     
-
     def read_coords(self):
         with self.mutex:
             xyz = self.xyz.copy() if self.xyz is not None else None
             conf = self.conf.copy() if self.conf is not None else None            
         return xyz, conf
-
 
     def shutdown(self):
         self.started = False

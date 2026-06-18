@@ -6,11 +6,10 @@
 ░▀░▀░▀▀▀░▀▀░░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀
 
 User interface for the rendering of the 3D reconstruction
-of the skeleton, according to the following keypoint convention:
-0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
-5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
-9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
-13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
+of the skeleton, according to the new keypoint strcture:
+0: Head 1: Left Shoulder   2: Right Shoulder  3: Left Elbow 4: Right Elbow   
+5: Left Wrist  6: Right Wrist   7: Upper torso   8: Lower torso
+9: Left Hip   10: Right Hip  11: Left Knee 12: Right Knee   13: Left Ankle   14: Right Ankle 
 """
 
 import webbrowser
@@ -25,11 +24,9 @@ from utils.decorators import chronometer, set_rate
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters 
 # ─────────────────────────────────────────────────────────────────────────────
-TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
-COCO_SKELETON = [(0, 1), (0, 2), (1, 3), (2, 4), (3, 5), 
-                (4, 6), (5, 7), (7, 9), (6, 8), (8, 10),
-                (5, 6), (5, 11), (6, 12), (11, 12),
-                (11, 13), (13, 15), (12, 14), (14, 16)]
+TARGET_KEYPOINTS = list(range(15))
+COCO_SKELETON = [(0, 7), (1, 3), (2, 4), (3, 5), 
+                (4, 6), (7, 8), (9, 11), (10, 12), (11, 13), (12, 14)]
 EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
