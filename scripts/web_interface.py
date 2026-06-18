@@ -46,6 +46,10 @@ def send_skeleton_data():
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
+        # x = [pnt[0] for pnt in merged_skeleton]
+        # y = [pnt[1] for pnt in merged_skeleton]
+        # z = [pnt[2] for pnt in merged_skeleton]
+
         x_data =[]
         y_data =[]
         z_data =[]
