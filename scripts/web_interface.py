@@ -53,22 +53,18 @@ def send_skeleton_data():
         x_data =[]
         y_data =[]
         z_data =[]
-        # for (a, b) in EDGES:
-        #     x_data.append(x[a] if not np.isnan(x[a]) else None)
-        #     x_data.append(x[b] if not np.isnan(x[b]) else None)
-        #     x_data.append(None)
-        #     y_data.append(y[a] if not np.isnan(y[a]) else None)
-        #     y_data.append(y[b] if not np.isnan(y[b]) else None)
-        #     y_data.append(None)
-        #     z_data.append(z[a] if not np.isnan(z[a]) else None)
-        #     z_data.append(z[b] if not np.isnan(z[b]) else None)
-        #     z_data.append(None)
-        # for a in range(len(merged_skeleton)):
-        #     x_data.append(x[a] if not np.isnan(x[a]) else None)
-        #     y_data.append(y[a] if not np.isnan(y[a]) else None)
-        #     z_data.append(z[a] if not np.isnan(z[a]) else None)
+        for (a, b) in EDGES:
+            x_data.append(x[a] if not np.isnan(x[a]) else None)
+            x_data.append(x[b] if not np.isnan(x[b]) else None)
+            x_data.append(None)
+            y_data.append(y[a] if not np.isnan(y[a]) else None)
+            y_data.append(y[b] if not np.isnan(y[b]) else None)
+            y_data.append(None)
+            z_data.append(z[a] if not np.isnan(z[a]) else None)
+            z_data.append(z[b] if not np.isnan(z[b]) else None)
+            z_data.append(None)
 
-        msg = {"x": x, "y": y, "z": z}
+        msg = {"x": x_data, "y": y_data, "z": z_data}
         socketio.emit("update_plot", msg)
         
     except Exception as e:
