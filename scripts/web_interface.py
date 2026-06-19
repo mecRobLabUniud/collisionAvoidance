@@ -46,24 +46,6 @@ def send_skeleton_data():
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
-        # x = [pnt[0] for pnt in merged_skeleton]
-        # y = [pnt[1] for pnt in merged_skeleton]
-        # z = [pnt[2] for pnt in merged_skeleton]
-
-        # x_data =[]
-        # y_data =[]
-        # z_data =[]
-        # for (a, b) in EDGES:
-        #     x_data.append(x[a] if not np.isnan(x[a]) else None)
-        #     x_data.append(x[b] if not np.isnan(x[b]) else None)
-        #     x_data.append(None)
-        #     y_data.append(y[a] if not np.isnan(y[a]) else None)
-        #     y_data.append(y[b] if not np.isnan(y[b]) else None)
-        #     y_data.append(None)
-        #     z_data.append(z[a] if not np.isnan(z[a]) else None)
-        #     z_data.append(z[b] if not np.isnan(z[b]) else None)
-        #     z_data.append(None)
-
         msg = {"x": x, "y": y, "z": z}
         socketio.emit("update_plot", msg)
         
