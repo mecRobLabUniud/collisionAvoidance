@@ -97,7 +97,7 @@ def main():
             raise ValueError(f"Wrong argument: {arg1}")
         
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-    dtrs.append(DataTransmitter("receiver", n_devices, "MERGED", port=7000))
+    dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()

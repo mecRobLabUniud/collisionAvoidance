@@ -97,7 +97,7 @@ def main():
             raise ValueError(f"Wrong argument: {arg1}")
         
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-    dts = DataTransmitter("sender", n_devices, "MERGED", port=7000)
+    dts = DataTransmitter("sender", 10, "MERGED", port=7000)
     print("Merging started correctly\n")
 
     # Main loop

@@ -2,6 +2,7 @@
 
 mode=$1
 use_gui=$2
+test=$3
 n_devices=$(lsusb | grep 8086 | wc -l)
 
 trap 'kill 0' INT
@@ -39,12 +40,15 @@ elif [ "$mode" == "--record" ]; then
     # pgrep -f "$data_recording" | xargs kill
 
 elif [ "$mode" == "--stream" ]; then
-    # echo -n "Enter the value of the test to stream: "
-    # read n_test
 
-    n_test="19"
-
-    n_devices=1 # $(ls $dir/scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
+    if [ -z "$test" ]; then
+        echo "No test number provided. Please provide a test number."
+        echo -n "Enter the value of the test to stream: "
+        read n_test
+    else
+        n_test=$test
+    fi
+    n_devices=$(ls $dir/scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
 
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &
