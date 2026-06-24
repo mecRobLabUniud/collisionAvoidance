@@ -39,10 +39,12 @@ elif [ "$mode" == "--record" ]; then
     # pgrep -f "$data_recording" | xargs kill
 
 elif [ "$mode" == "--stream" ]; then
-    echo -n "Enter the value of the test to stream: "
-    read n_test
+    # echo -n "Enter the value of the test to stream: "
+    # read n_test
 
-    n_devices=$(ls $dir/scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
+    n_test="19"
+
+    n_devices=1 # $(ls $dir/scripts/data/skeleton_data/test"$n_test"/skeleton* | wc -l)
 
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &
