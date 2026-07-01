@@ -35,7 +35,7 @@ kfs = [KalmanFilter6D() for _ in range(skel_len)]
 # ─────────────────────────────────────────────────────────────────────────────
 def reshape_structure(skeleton):
     new_skeleton = []
-    head_markers = [wp for wp in skeleton[0:5] if not np.isnan(wp[0])]
+    head_markers = [wp for wp in skeleton[3:5] if not np.isnan(wp[0])]
     head = [[head_markers[i][j] for i in range(len(head_markers))] for j in range(3)]
     new_skeleton.append([sum(head[i])/len(head[i]) if len(head[i])>0 else np.nan for i in range(3)])
     for i in range(5, 11):

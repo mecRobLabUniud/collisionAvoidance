@@ -36,12 +36,29 @@ topic = "SKEL"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Rula thread 
+# ─────────────────────────────────────────────────────────────────────────────
+@set_rate(30)
+def send_rula_score():
+    try:
+        score = dtrs[-1].receive_rula_score()
+        socketio.emit("update_rula", score)
+        
+    except Exception as e:
+        print(f"RULA thread error: {e}")
+
+def rula_thread():
+    while True:
+        send_rula_score()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Skeleton thread 
 # ─────────────────────────────────────────────────────────────────────────────
 @set_rate(30)
 def send_skeleton_data():
     try:
-        merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+        merged_skeleton = dtrs[-2].receive_skeleton_data()[0]
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
@@ -63,7 +80,7 @@ def skeleton_thread():
 @set_rate(30)
 def send_frames():
     try:
-        frames = [dtr.receive_frames() for dtr in dtrs[0:-1]]
+        frames = [dtr.receive_frames() for dtr in dtrs[0:-2]]
         for n, frame in enumerate(frames):
             socketio.emit(f"update_stream{n+1}", {"frame": frame})
     except Exception as e:
@@ -98,9 +115,11 @@ def main():
         
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
+    dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()
+    threading.Thread(target=rula_thread, daemon=True).start()
     webbrowser.open_new('http://127.0.0.1:5000/')
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
     

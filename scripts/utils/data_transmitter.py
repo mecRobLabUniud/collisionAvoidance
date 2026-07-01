@@ -150,13 +150,15 @@ class DataTransmitter:
             self.setup_shm_sender()
             self.send_frames = self._send_frames
             self.send_skeleton_data = self._send_skeleton_data
+            self.send_rula_score = self._send_rula_score
         elif self.mode == "receiver":
             self.setup_zmq_receiver()
             self.setup_shm_receiver()
             self.receive_raw_frames = self._receive_raw_frames
-            self.receive_packed_skeleton_data = self._receive_packed_skeleton_data
+            self.receive_packed_msg = self._receive_packed_msg
             self.receive_frames = self._receive_frames
             self.receive_skeleton_data = self._receive_skeleton_data
+            self.receive_rula_score = self._receive_rula_score
         else:
             raise ValueError(f"Unknown argument: {self.mode}")
 
@@ -220,6 +222,11 @@ class DataTransmitter:
         msg = (f"{self.topic}_{self.device_id}; " f"{json.dumps(skeleton.tolist())}; " f"{json.dumps(confidence.tolist())}")
         self.socket.send_string(msg)
 
+    @requires("sender")
+    def _send_rula_score(self, score: list):
+        msg = (f"{self.topic}_{self.device_id}; " f"{json.dumps(score)}")
+        self.socket.send_string(msg)
+
 
     # ── Receive block ───────────────────────────────────────────────────────────
     @requires("receiver")
@@ -227,7 +234,7 @@ class DataTransmitter:
         return np.ndarray((H, W, C), dtype=np.uint8, buffer=self.shm.buf).copy()
 
     @requires("receiver")
-    def _receive_packed_skeleton_data(self) -> str:
+    def _receive_packed_msg(self) -> str:
         return self.socket.recv_string()
 
     @requires("receiver")
@@ -236,11 +243,18 @@ class DataTransmitter:
 
     @requires("receiver")
     def _receive_skeleton_data(self):
-        packed = self.receive_packed_skeleton_data()
+        packed = self.receive_packed_msg()
         _, skeleton_packed, confidence_packed = packed.split("; ", 2)
         skeleton = json.loads(skeleton_packed)
         confidence = json.loads(confidence_packed)
         return skeleton, confidence
+    
+    @requires("receiver")
+    def _receive_rula_score(self):
+        packed = self.receive_packed_msg()
+        _, score_packed = packed.split("; ", 1)
+        score = json.loads(score_packed)[0]
+        return score
 
 
     # ── Shutdown ─────────────────────────────────────────────────────────────────
