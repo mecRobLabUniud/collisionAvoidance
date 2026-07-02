@@ -34,6 +34,7 @@ const socket = io();   // single connection for everything
 // 3D plot update
 // ─────────────────────────────────────────────────────────────────────────────
 let plotInitialized = false;
+let rula_score = 0;
 
 function capsuleMesh(p1, p2, radius, segments = 16) {
     const x = [], y = [], z = [];
@@ -109,12 +110,39 @@ function capsuleMesh(p1, p2, radius, segments = 16) {
         }
     }
 
+    let caps_color;
+    switch (rula_score) {
+        case 1:
+            caps_color = 'rgb(30, 209, 225)';
+            break;
+        case 2:
+            caps_color = 'rgb(30, 209, 225)';
+            break;
+        case 3:
+            caps_color = 'rgb(53, 225, 30)';
+            break;
+        case 4:
+            caps_color = 'rgb(53, 225, 30)';
+            break;
+        case 5:
+            caps_color = 'rgb(225, 205, 30)';
+            break;
+        case 6:
+            caps_color = 'rgb(225, 205, 30)';
+            break;
+        case 7:
+            caps_color = 'rgb(225, 33, 30)';
+            break;
+        default:
+            caps_color = 'rgb(79, 79, 79)';
+    }
+
     return {
         type: 'mesh3d',
         x, y, z,
         i: iIdx, j: jIdx, k: kIdx,
         opacity: 0.4,
-        color: 'rgb(100, 149, 237)',
+        color: caps_color,
         flatshading: false,
         lighting: { diffuse: 0.8, specular: 0.2 }
     };
@@ -147,9 +175,10 @@ function update_plot() {
 // RULA score update
 // ─────────────────────────────────────────────────────────────────────────────
 function update_rula() {
-    socket.on('update_rula', function (rula_score) {
+    socket.on('update_rula', function (score) {
+        rula_score = Math.max(...score);
         const rulaDiv = document.getElementById('rula_score');
-        rulaDiv.innerHTML = `RULA Score: ${rula_score[0]} (Right), ${rula_score[1]} (Left)`;
+        rulaDiv.innerHTML = `RULA Score: ${rula_score}`;
     });
 }
 
