@@ -63,18 +63,17 @@ def send_skeleton_data():
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
-        msg = {"x": x, "y": y, "z": z}
-        socketio.emit("update_plot", msg)
-
         robot = dtrs[-1].receive_skeleton_data()[0]
         caps_radius = dtrs[-1].receive_skeleton_data()[1]
-        x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
-        y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
-        z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
+        x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
+        y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
+        z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
         radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
 
-        msg = {"x": x, "y": y, "z": z, "radius": radius}
-        socketio.emit("update_robot", msg)
+        print(robot)
+
+        msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "radius": radius}
+        socketio.emit("update_plot", msg)
         
     except Exception as e:
         print(f"Skeleton thread error: {e}")

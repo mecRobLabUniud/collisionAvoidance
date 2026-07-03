@@ -2,8 +2,8 @@
 // 3D plot setup
 // ─────────────────────────────────────────────────────────────────────────────
 const camera = {
-    eye: { x: 0.5, y: 1.5, z: 0.5 },
-    center: { x: 0, y: 0, z: 0.1 },
+    eye: { x: 2, y: 0, z: 0.5},
+    center: { x: 0, y: 0, z: 0 },
     up: { x: 0, y: 0, z: 1 },
     projection: { type: 'perspective' }
 };
@@ -36,7 +36,7 @@ const socket = io();   // single connection for everything
 let plotInitialized = false;
 let rula_score = 0;
 
-function capsuleMesh(p1, p2, radius, segments = 16) {
+function capsuleMesh(p1, p2, radius, opacity, rula = true, segments = 16) {
     const x = [], y = [], z = [];
     const iIdx = [], jIdx = [], kIdx = [];
 
@@ -110,38 +110,40 @@ function capsuleMesh(p1, p2, radius, segments = 16) {
         }
     }
 
-    let caps_color;
-    switch (rula_score) {
-        case 1:
-            caps_color = 'rgb(30, 209, 225)';
-            break;
-        case 2:
-            caps_color = 'rgb(30, 209, 225)';
-            break;
-        case 3:
-            caps_color = 'rgb(53, 225, 30)';
-            break;
-        case 4:
-            caps_color = 'rgb(53, 225, 30)';
-            break;
-        case 5:
-            caps_color = 'rgb(225, 205, 30)';
-            break;
-        case 6:
-            caps_color = 'rgb(225, 205, 30)';
-            break;
-        case 7:
-            caps_color = 'rgb(225, 33, 30)';
-            break;
-        default:
-            caps_color = 'rgb(79, 79, 79)';
+    let caps_color = 'rgb(190, 190, 190)';
+    if (rula) {
+        switch (rula_score) {
+            case 1:
+                caps_color = 'rgb(30, 209, 225)';
+                break;
+            case 2:
+                caps_color = 'rgb(30, 209, 225)';
+                break;
+            case 3:
+                caps_color = 'rgb(53, 225, 30)';
+                break;
+            case 4:
+                caps_color = 'rgb(53, 225, 30)';
+                break;
+            case 5:
+                caps_color = 'rgb(225, 205, 30)';
+                break;
+            case 6:
+                caps_color = 'rgb(225, 205, 30)';
+                break;
+            case 7:
+                caps_color = 'rgb(225, 33, 30)';
+                break;
+            default:
+                caps_color = 'rgb(190, 190, 190)';
+        }
     }
 
     return {
         type: 'mesh3d',
         x, y, z,
         i: iIdx, j: jIdx, k: kIdx,
-        opacity: 0.4,
+        opacity: opacity,
         color: caps_color,
         flatshading: false,
         lighting: { diffuse: 0.8, specular: 0.2 }
@@ -150,37 +152,27 @@ function capsuleMesh(p1, p2, radius, segments = 16) {
 
 function update_plot() {
     socket.on('update_plot', function (point) {
+        const data = [];
         const COCO_SKELETON = [[0, 7], [1, 3], [2, 4], [3, 5], [4, 6], [7, 8], [9, 11], [10, 12], [11, 13], [12, 14]];
         const r_sw_h = [0.16, 0.05, 0.05, 0.06, 0.06, 0.15, 0.1, 0.1, 0.08, 0.08];
-        const data = [];
+        const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
+        const r_sw_r = point.radius;
+        rv = [0.085, 0.085, 0.06, 0.065];
+        
         for (let i = 0; i < COCO_SKELETON.length; i++) {
             const a = COCO_SKELETON[i][0];
             const b = COCO_SKELETON[i][1];
             if (point.x[a] != null && point.x[b] != null) {
-                data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_h[i]));
+                data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_h[i], 0.4));
             }
         }
 
-        if (!plotInitialized) {
-            Plotly.newPlot('plot', data, layout);
-            plotInitialized = true;
-        } else {
-            Plotly.react('plot', data, layout);
-        }
-    });
-}
-
-
-function update_robot() {
-    socket.on('update_robot', function (point) {
-        const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
-        const r_sw_r = point.radius;
-        const data = [];
         for (let i = 0; i < ROBOT_CONFIG.length; i++) {
             const a = ROBOT_CONFIG[i][0];
             const b = ROBOT_CONFIG[i][1];
-            if (point.x[a] != null && point.x[b] != null) {
-                data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_r[i]));
+            if (point.x_robot[a] != null && point.x_robot[b] != null) {
+                data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], r_sw_r[i], 0.4, rule = false));
+                data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], rv[i], 0.2, rule = false));
             }
         }
 
@@ -191,7 +183,32 @@ function update_robot() {
             Plotly.react('plot', data, layout);
         }
     });
+
+    
 }
+
+
+// function update_robot() {
+//     socket.on('update_robot', function (point) {
+//         const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
+//         const r_sw_r = point.radius;
+//         const data = [];
+//         for (let i = 0; i < ROBOT_CONFIG.length; i++) {
+//             const a = ROBOT_CONFIG[i][0];
+//             const b = ROBOT_CONFIG[i][1];
+//             if (point.x[a] != null && point.x[b] != null) {
+//                 data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_r[i]));
+//             }
+//         }
+// 
+//         if (!plotInitialized) {
+//             Plotly.newPlot('plot', data, layout);
+//             plotInitialized = true;
+//         } else {
+//             Plotly.react('plot', data, layout);
+//         }
+//     });
+// }
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,7 +255,6 @@ function update_stream4() {
 // Launch functions @ 30Hz update rate
 // ─────────────────────────────────────────────────────────────────────────────
 setTimeout(update_plot, 1 / 30 * 1000);
-// setTimeout(update_robot, 1 / 30 * 1000);
 setTimeout(update_rula, 1 / 30 * 1000);
 setTimeout(update_stream1, 1 / 30 * 1000);
 setTimeout(update_stream2, 1 / 30 * 1000);
