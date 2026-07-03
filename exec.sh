@@ -14,21 +14,20 @@ data_recording="python3 $dir/scripts/data_recording.py"
 data_merging="python3 $dir/scripts/data_merging.py"
 web_interface="python3 $dir/scripts/web_interface.py"
 calibration="python3 $dir/scripts/calibration.py"
+rula_evaluation="./build/rula_evaluation"
 
 if [ "$mode" == "--track" ]; then
     echo "Starting tracking procedure..."
     $data_merging "$n_devices" &
     sleep 0.1
     $camera_stream &
+    $rula_evaluation &
     if [ "$use_gui" == "--gui" ]; then
         sleep 1
         $web_interface "$n_devices"
-        # pgrep -f "$web_interface" | xargs kill
     else
         wait
     fi
-    # pgrep -f "$data_merging" | xargs kill
-    # pgrep -f "$camera_stream" | xargs kill
 
 elif [ "$mode" == "--record" ]; then
     echo "Starting recording procedure..."
@@ -36,8 +35,6 @@ elif [ "$mode" == "--record" ]; then
     sleep 0.1
     $camera_stream &
     wait
-    # pgrep -f "$camera_stream" | xargs kill
-    # pgrep -f "$data_recording" | xargs kill
 
 elif [ "$mode" == "--stream" ]; then
 
@@ -53,15 +50,13 @@ elif [ "$mode" == "--stream" ]; then
     echo "Starting streaming procedure..."
     $data_recording "$n_devices" "-s" "$n_test" &
     $data_merging "$n_devices" &
+    $rula_evaluation &
     if [ "$use_gui" == "--gui" ]; then
         sleep 1
         $web_interface "$n_devices"
-        # pgrep -f "$web_interface" | xargs kill
     else
         wait
     fi
-    # pgrep -f "$data_recording" | xargs kill
-    # pgrep -f "$data_merging" | xargs kill
 
 elif [ "$mode" == "--calibrate" ]; then
     $calibration
