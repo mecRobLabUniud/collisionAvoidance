@@ -171,6 +171,29 @@ function update_plot() {
 }
 
 
+function update_robot() {
+    socket.on('update_robot', function (point) {
+        const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
+        const r_sw_r = point.radius;
+        const data = [];
+        for (let i = 0; i < ROBOT_CONFIG.length; i++) {
+            const a = ROBOT_CONFIG[i][0];
+            const b = ROBOT_CONFIG[i][1];
+            if (point.x[a] != null && point.x[b] != null) {
+                data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_r[i]));
+            }
+        }
+
+        if (!plotInitialized) {
+            Plotly.newPlot('plot', data, layout);
+            plotInitialized = true;
+        } else {
+            Plotly.react('plot', data, layout);
+        }
+    });
+}
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RULA score update
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,6 +238,7 @@ function update_stream4() {
 // Launch functions @ 30Hz update rate
 // ─────────────────────────────────────────────────────────────────────────────
 setTimeout(update_plot, 1 / 30 * 1000);
+// setTimeout(update_robot, 1 / 30 * 1000);
 setTimeout(update_rula, 1 / 30 * 1000);
 setTimeout(update_stream1, 1 / 30 * 1000);
 setTimeout(update_stream2, 1 / 30 * 1000);

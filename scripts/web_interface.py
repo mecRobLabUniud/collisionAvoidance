@@ -41,7 +41,7 @@ topic = "SKEL"
 @set_rate(30)
 def send_rula_score():
     try:
-        score = dtrs[-1].receive_rula_score()
+        score = dtrs[-2].receive_rula_score()
         socketio.emit("update_rula", score)
         
     except Exception as e:
@@ -58,13 +58,23 @@ def rula_thread():
 @set_rate(30)
 def send_skeleton_data():
     try:
-        merged_skeleton = dtrs[-2].receive_skeleton_data()[0]
+        merged_skeleton = dtrs[-3].receive_skeleton_data()[0]
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
         msg = {"x": x, "y": y, "z": z}
         socketio.emit("update_plot", msg)
+
+        robot = dtrs[-1].receive_skeleton_data()[0]
+        caps_radius = dtrs[-1].receive_skeleton_data()[1]
+        x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
+        y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
+        z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
+        radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
+
+        msg = {"x": x, "y": y, "z": z, "radius": radius}
+        socketio.emit("update_robot", msg)
         
     except Exception as e:
         print(f"Skeleton thread error: {e}")
@@ -80,7 +90,7 @@ def skeleton_thread():
 @set_rate(30)
 def send_frames():
     try:
-        frames = [dtr.receive_frames() for dtr in dtrs[0:-2]]
+        frames = [dtr.receive_frames() for dtr in dtrs[0:-3]]
         for n, frame in enumerate(frames):
             socketio.emit(f"update_stream{n+1}", {"frame": frame})
     except Exception as e:
@@ -116,6 +126,7 @@ def main():
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
     dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))
+    dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()
