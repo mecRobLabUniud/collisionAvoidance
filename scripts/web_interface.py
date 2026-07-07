@@ -70,8 +70,6 @@ def send_skeleton_data():
         z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
         radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
 
-        print(robot)
-
         msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "radius": radius}
         socketio.emit("update_plot", msg)
         

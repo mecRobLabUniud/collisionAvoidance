@@ -14,7 +14,7 @@ data_recording="python3 $dir/scripts/data_recording.py"
 data_merging="python3 $dir/scripts/data_merging.py"
 web_interface="python3 $dir/scripts/web_interface.py"
 calibration="python3 $dir/scripts/calibration.py"
-rula_evaluation="./build/rula_evaluation"
+rula_evaluation="$dir/build/rula_evaluation"
 
 if [ "$mode" == "--track" ]; then
     echo "Starting tracking procedure..."
