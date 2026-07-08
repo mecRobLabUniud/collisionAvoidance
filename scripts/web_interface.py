@@ -33,6 +33,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 dtrs = None
 in_port = 7000
 topic = "SKEL"
+use_robot = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -58,19 +59,22 @@ def rula_thread():
 @set_rate(30)
 def send_skeleton_data():
     try:
-        merged_skeleton = dtrs[-3].receive_skeleton_data()[0]
+        merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
-        robot = dtrs[-1].receive_skeleton_data()[0]
-        caps_radius = dtrs[-1].receive_skeleton_data()[1]
-        x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
-        y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
-        z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
-        radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
+        if use_robot:
+            robot = dtrs[-3].receive_skeleton_data()[0]
+            caps_radius = dtrs[-3].receive_skeleton_data()[1]
+            x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
+            y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
+            z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
+            radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
 
-        msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "radius": radius}
+            msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "radius": radius}
+        else:
+            msg = {"x": x, "y": y, "z": z}
         socketio.emit("update_plot", msg)
         
     except Exception as e:
@@ -110,8 +114,9 @@ def index():
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global dtrs, n_devices
+    global dtrs, n_devices, use_robot
     arg1 = sys.argv[1] if len(sys.argv) > 1 else None
+    arg2 = sys.argv[2] if len(sys.argv) > 2 else None
     if arg1 is None:
         raise ValueError("No argument provided. Enter the number of cameras")   
     else:
@@ -119,11 +124,16 @@ def main():
             n_devices = int(arg1)  
         except:
             raise ValueError(f"Wrong argument: {arg1}")
+        try:
+            if arg2 == "--robot":
+                use_robot = True
+        except:
+            raise ValueError(f"Wrong argument: {arg2}")
         
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-    dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
+    if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
     dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))
-    dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
+    dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()

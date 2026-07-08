@@ -167,12 +167,14 @@ function update_plot() {
             }
         }
 
-        for (let i = 0; i < ROBOT_CONFIG.length; i++) {
-            const a = ROBOT_CONFIG[i][0];
-            const b = ROBOT_CONFIG[i][1];
-            if (point.x_robot[a] != null && point.x_robot[b] != null) {
-                data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], r_sw_r[i], 0.4, rule = false));
-                data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], rv[i], 0.2, rule = false));
+        if (point.x_robot && point.y_robot && point.z_robot && point.x_robot) {
+            for (let i = 0; i < ROBOT_CONFIG.length; i++) {
+                const a = ROBOT_CONFIG[i][0];
+                const b = ROBOT_CONFIG[i][1];
+                if (point.x_robot[a] != null && point.x_robot[b] != null) {
+                    data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], r_sw_r[i], 0.4, rule = false));
+                    data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], rv[i], 0.2, rule = false));
+                }
             }
         }
 
