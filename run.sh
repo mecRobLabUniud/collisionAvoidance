@@ -126,6 +126,7 @@ case "$mode" in
         fi
 
         n_devices=$(ls "$dir"/scripts/data/skeleton_data/test"$n_test"/skeleton* 2>/dev/null | wc -l)
+        echo "Found $n_devices skeleton data for test $n_test."
         if [ "$n_devices" -eq 0 ]; then
             echo "Error: no skeleton data found for test $n_test." >&2
             exit 1
