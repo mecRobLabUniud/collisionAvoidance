@@ -93,7 +93,9 @@ def main():
         dtss.append(dts)
 
         # Create trackers
-        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number), save=save_data).start(model)
+        tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number))
+        tracker.start(model)
+        # tracker.start(hand_model)
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()

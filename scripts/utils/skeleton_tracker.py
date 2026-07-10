@@ -45,10 +45,8 @@ running = True
 # Skeleton tracker using YOLOv8-Pose for keypoint detection
 # ─────────────────────────────────────────────────────────────────────────────
 class SkeletonTracker:
-    def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True, save: bool=False):
+    def __init__(self, device, w_camera: int=848, h_camera: int=480, camera_rate: int=60, depth: bool=True):
         self.device = device
-        self.align = rs.align(rs.stream.color) # Allinea depth a color
-        self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
         self.color = None
         self.depth = None
         self.frame = None
@@ -59,7 +57,11 @@ class SkeletonTracker:
         self.conf_thr = conf_thr
         self.conf = None
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.01, beta=10.0)
-        self.save_data = save
+
+        self.align = rs.align(rs.stream.color) # Allinea depth a color
+        self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
+        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
+        
         
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -94,7 +96,7 @@ class SkeletonTracker:
         if self.started:
             return
         self.started = True
-        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
+        
         self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
 
         self.camera_thread.start()
@@ -144,7 +146,7 @@ class SkeletonTracker:
             color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
-                person = results[0].keypoints.data[0].cpu().numpy()  # (17,3) -> x, y, conf
+                person = results[0].keypoints.data[0].cpu().numpy()
                 xy = person[:, :2]
                 conf = person[:, 2]
                 xyz = np.full((17, 3), np.nan, dtype=np.float32)
@@ -275,10 +277,7 @@ class SkeletonTracker:
         self.started = False
         self.camera_thread.join()
         self.model_thread.join()
-        if self.save_data:            
-            self.color_writer.release()
-            self.depth_writer.release()
-            self.frame_writer.release()
+
 
         
 

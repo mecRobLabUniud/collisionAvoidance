@@ -130,8 +130,6 @@ def main():
         except:
             raise ValueError(f"Wrong argument: {arg2}")
         
-    print('---------------')
-    print(n_devices)
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
     dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))
