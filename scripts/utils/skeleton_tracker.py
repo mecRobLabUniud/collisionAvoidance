@@ -52,16 +52,16 @@ class SkeletonTracker:
         self.frame = None
         self.camera_thread = None
         self.model_thread = None
-        self.started = False
+        self.started = []
         self.xyz = None
         self.conf_thr = conf_thr
         self.conf = None
         self.smoother = Keypoints3DSmoother(num_kpts=17, min_cutoff=0.01, beta=10.0)
 
+        self.mutex = threading.Lock()
         self.align = rs.align(rs.stream.color) # Allinea depth a color
         self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
-        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())
-        
+        self.camera_thread = threading.Thread(target=self.camera_streaming, args=())  
         
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -92,14 +92,15 @@ class SkeletonTracker:
     # Start threads
     # ─────────────────────────────────────────────────────────────────────────────
     def start(self, model):
-        self.mutex = threading.Lock()
-        if self.started:
-            return
-        self.started = True
-        
-        self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
+        # self.mutex = threading.Lock()
+        if not "camera" in self.started:
+            self.started.append("camera")
+            self.camera_thread.start()
 
-        self.camera_thread.start()
+        if model in self.started:
+            return
+        self.started.append(model)
+        self.model_thread = threading.Thread(target=self.skeleton_tracking, args=(model,))
         self.model_thread.start()
         return self
     
@@ -134,7 +135,7 @@ class SkeletonTracker:
     # skeleton tracking prediction
     # ─────────────────────────────────────────────────────────────────────────────
     def skeleton_tracking(self, model):
-        while running and self.started:
+        while running and (model in self.started):
             if not self.depth or not self.color:
                 continue
             else:
@@ -145,6 +146,7 @@ class SkeletonTracker:
             # Neural network inference
             color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
+            print(f"Model {model.model_name} inference done, {len(results)} results")
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
                 person = results[0].keypoints.data[0].cpu().numpy()
                 xy = person[:, :2]
@@ -274,7 +276,7 @@ class SkeletonTracker:
         return xyz, conf
 
     def shutdown(self):
-        self.started = False
+        self.started = []
         self.camera_thread.join()
         self.model_thread.join()
 
