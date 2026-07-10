@@ -34,6 +34,7 @@ save_data = False
 display_stream = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
 yolo_model = "yolo26n-pose"
+yolo_hand_model = "yolo26n-hands"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,7 +81,9 @@ def tracking(dtss, trackers, rotation_matrices):
 def main():
     ctx = rs.context()
     devices = ctx.devices  # Query connected devices
-    model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
+    # model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
+    model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.pt"), verbose=False)  # Load the exported TensorRT model  
+    hand_model = YOLO(os.path.join(script_dir, f"models/{yolo_hand_model}.pt"), verbose=False)
     dtss = []
     trackers = []
     rotation_matrices = []

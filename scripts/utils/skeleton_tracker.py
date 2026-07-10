@@ -28,7 +28,7 @@ logging.getLogger('tensorrt').setLevel(logging.ERROR)
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
-TARGET_KEYPOINTS = list(range(17))  # 0..12 pelvis-up
+TARGET_KEYPOINTS = list(range(17))
 COCO_SKELETON = [
     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
     (5, 7), (7, 9), (6, 8), (8, 10),
