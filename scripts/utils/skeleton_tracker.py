@@ -28,14 +28,14 @@ logging.getLogger('tensorrt').setLevel(logging.ERROR)
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
-TARGET_KEYPOINTS = list(range(17))
-COCO_SKELETON = [
-    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-    (5, 7), (7, 9), (6, 8), (8, 10),
-    (5, 6), (5, 11), (6, 12), (11, 12),
-    (11, 13), (13, 15), (12, 14), (14, 16)
-]
-EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+# TARGET_KEYPOINTS = list(range(17))
+# COCO_SKELETON = [
+#     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
+#     (5, 7), (7, 9), (6, 8), (8, 10),
+#     (5, 6), (5, 11), (6, 12), (11, 12),
+#     (11, 13), (13, 15), (12, 14), (14, 16)
+# ]
+# EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1.0)
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
@@ -134,6 +134,7 @@ class SkeletonTracker:
     # ─────────────────────────────────────────────────────────────────────────────
     # skeleton tracking prediction
     # ─────────────────────────────────────────────────────────────────────────────
+    @chronometer
     def skeleton_tracking(self, model):
         while running and (model in self.started):
             if not self.depth or not self.color:
@@ -143,15 +144,30 @@ class SkeletonTracker:
                     color = self.color
                     depth = self.depth
 
+            if model.model_name == "/home/lab/Desktop/skeleton_tracking/scripts/models/yolo26n-hands.pt":
+                TARGET_KEYPOINTS = list(range(21))
+                COCO_SKELETON = [
+                    (0, 9)
+                ]
+                EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+            else:
+                TARGET_KEYPOINTS = list(range(17))
+                COCO_SKELETON = [
+                    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
+                    (5, 7), (7, 9), (6, 8), (8, 10),
+                    (5, 6), (5, 11), (6, 12), (11, 12),
+                    (11, 13), (13, 15), (12, 14), (14, 16)
+                ]
+                EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+
             # Neural network inference
             color_img = np.asanyarray(color.get_data())
             results = model.predict(color_img, verbose=False)
-            print(f"Model {model.model_name} inference done, {len(results)} results")
             if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
                 person = results[0].keypoints.data[0].cpu().numpy()
                 xy = person[:, :2]
                 conf = person[:, 2]
-                xyz = np.full((17, 3), np.nan, dtype=np.float32)
+                xyz = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
                 for k in TARGET_KEYPOINTS:
                     if conf[k] < conf_thr:
                         continue

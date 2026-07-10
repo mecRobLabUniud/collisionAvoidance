@@ -61,7 +61,10 @@ def transform_points(T, pts_skeleton):
 def tracking(dtss, trackers, rotation_matrices):    
     for n, (dts, tracker, rotation_matrix) in enumerate(zip(dtss, trackers, rotation_matrices)):
         frame = tracker.read_frame()
-        skeleton, confidence = tracker.read_coords()    
+        skeleton, confidence = tracker.read_coords()   
+
+        # print('------------------------')
+        # print(skeleton) 
 
         # Write frame into shared memory
         if not frame is None:
