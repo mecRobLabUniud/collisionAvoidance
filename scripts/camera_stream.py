@@ -63,9 +63,6 @@ def tracking(dtss, trackers, rotation_matrices):
         frame = tracker.read_frame()
         skeleton, confidence = tracker.read_coords()   
 
-        # print('------------------------')
-        # print(skeleton) 
-
         # Write frame into shared memory
         if not frame is None:
             dts.send_frames(frame)
@@ -83,22 +80,18 @@ def tracking(dtss, trackers, rotation_matrices):
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     ctx = rs.context()
-    devices = ctx.devices  # Query connected devices
-    # model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.engine"), verbose=False)  # Load the exported TensorRT model  
-    model = YOLO(os.path.join(script_dir, f"models/{yolo_model}.pt"), verbose=False)  # Load the exported TensorRT model  
-    hand_model = YOLO(os.path.join(script_dir, f"models/{yolo_hand_model}.pt"), verbose=False)
+    devices = ctx.devices
     dtss = []
     trackers = []
     rotation_matrices = []
     for n, device in enumerate(devices):
-        # Inizializzazione sender
+        # Sender initialization
         dts = DataTransmitter("sender", n, "SINGLE_CAMERA")
         dtss.append(dts)
 
         # Create trackers
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number))
-        tracker.start(model)
-        # tracker.start(hand_model)
+        tracker.start("pose")
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()

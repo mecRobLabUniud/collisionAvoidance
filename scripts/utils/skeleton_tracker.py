@@ -11,7 +11,6 @@ It includes robust depth reading, temporal smoothing of keypoints, and simplifie
 capsule representation of limbs for collision avoidance.
 """
 
-import mediapipe as mp
 import cv2
 import math
 import time
@@ -21,6 +20,7 @@ import threading
 import logging
 from utils.filters import Keypoints3DSmoother
 from utils.decorators import chronometer, set_rate
+from mediapipe_utils.pose_inference_mediapipe import inference_pose_landmarker, draw_landmarks_on_image
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -39,24 +39,6 @@ EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TA
 conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1.0)
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
-
-
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-
-pose = mp_pose.Pose(
-    static_image_mode=False,      # False for video/stream (uses tracking between frames)
-    model_complexity=0,           # 0=lite, 1=full, 2=heavy
-    smooth_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
-
-# Load image
-image = cv2.imread("/home/lab/Pictures/prova.jpg")
-rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # MediaPipe expects RGB
-annotated = None  # To store the annotated image
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -161,38 +143,23 @@ class SkeletonTracker:
                     color = self.color
                     depth = self.depth              
 
-            # Neural network inference
             color_img = np.asanyarray(color.get_data())
-            t0 = time.time()
-            # results = model.predict(color_img, verbose=False)
-
-            results = holistic.process(color_img)
-
-            # Draw on a copy (draw in BGR since that's what cv2 will save/show)
-            annotated = image.copy()
-
-            # Face mesh
-            mp_drawing.draw_landmarks(
-                annotated,
-                results.face_landmarks,
-                mp_holistic.FACEMESH_CONTOURS,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
-            )
-
-            # Pose
-            mp_drawing.draw_landmarks(
-                annotated,
-                results.pose_landmarks,
-                mp_holistic.POSE_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
-            )
-
-            with self.mutex:
-                self.xyz = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
-                self.conf = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
+            rgb_img = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB)
+            results = inference_pose_landmarker(rgb_img)
+            annotated = draw_landmarks_on_image(rgb_img, results)
             
-            # if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
+            if not results.pose_world_landmarks == []:
+                person = results.pose_world_landmarks[0]
+                xyz = np.full((len(person), 3), np.nan, dtype=np.float32)
+                conf = np.full((len(person)), np.nan, dtype=np.float32)
+                for k, landmark in enumerate(person):
+                    xyz[k] = np.array([landmark.x, landmark.y, landmark.z], dtype=np.float32)
+                    conf[k] = landmark.visibility
+
+                with self.mutex:
+                    self.xyz = self.smoother.update(xyz, conf, conf_thr)
+                    self.conf = conf
+
             #     person = results[0].keypoints.data[0].cpu().numpy()
             #     xy = person[:, :2]
             #     conf = person[:, 2]
@@ -216,18 +183,6 @@ class SkeletonTracker:
             #     with self.mutex:
             #         self.xyz = self.smoother.update(xyz, conf, conf_thr)
             #         self.conf = conf
-            #         
-            #     # Image annotation for debugging
-            #     for (u, v) in EDGES:
-            #         if conf[u] >= conf_thr and conf[v] >= conf_thr:
-            #             pt1 = (int(xy[u, 0]), int(xy[u, 1]))
-            #             pt2 = (int(xy[v, 0]), int(xy[v, 1]))
-            #             cv2.line(color_img, pt1, pt2, (200, 200, 200), 2)
-            #     for k in TARGET_KEYPOINTS:
-            #         if conf[k] >= conf_thr:
-            #             cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 5, (200, 200, 200), -1)
-
-            print(f"YOLOv8-Pose inference time: {time.time() - t0:.3f} seconds", end="\r")
 
             with self.mutex:
                 self.frame = annotated.copy()

@@ -3,14 +3,18 @@ import numpy as np
 import time
 import pyrealsense2 as rs
 import mediapipe as mp
+import os
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
 from mediapipe import solutions
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+start_time = time.time()
+
 # --- Setup PoseLandmarker (Tasks API) ---
 base_options = python.BaseOptions(
-    model_asset_path='pose_landmarker_full.task',
+    model_asset_path=f'{current_dir}/../models/pose_landmarker_full.task',
     delegate=python.BaseOptions.Delegate.GPU,  # falls back to CPU if GPU unavailable
 )
 options = vision.PoseLandmarkerOptions(
@@ -22,20 +26,8 @@ options = vision.PoseLandmarkerOptions(
 )
 landmarker = vision.PoseLandmarker.create_from_options(options)
 
-# --- RealSense setup ---
-w_camera, h_camera = 848, 480
-ctx = rs.context()
-devices = ctx.devices
-pipe = rs.pipeline()
-cfg = rs.config()
-cfg.enable_device(devices[0].get_info(rs.camera_info.serial_number))
-cfg.enable_stream(rs.stream.color, w_camera, h_camera, rs.format.bgr8, 60)
-pipe.start(cfg)
-
 
 def draw_landmarks_on_image(rgb_image, detection_result):
-    """Tasks API returns a different result structure than legacy solutions,
-    so drawing needs this adapter to reuse mp.solutions.drawing_utils."""
     pose_landmarks_list = detection_result.pose_landmarks
     annotated_image = np.copy(rgb_image)
 
@@ -51,12 +43,27 @@ def draw_landmarks_on_image(rgb_image, detection_result):
             solutions.pose.POSE_CONNECTIONS,
             solutions.drawing_styles.get_default_pose_landmarks_style(),
         )
-    return annotated_image
+    return cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR)
+
+
+def inference_pose_landmarker(rgb_image):
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
+
+    frame_timestamp_ms = int((time.time() - start_time) * 1000)
+    result = landmarker.detect_for_video(mp_image, frame_timestamp_ms)
+    return result
 
 
 def main():
-    frame_timestamp_ms = 0
-    start_time = time.time()
+    # --- RealSense setup ---
+    w_camera, h_camera = 848, 480
+    ctx = rs.context()
+    devices = ctx.devices
+    pipe = rs.pipeline()
+    cfg = rs.config()
+    cfg.enable_device(devices[0].get_info(rs.camera_info.serial_number))
+    cfg.enable_stream(rs.stream.color, w_camera, h_camera, rs.format.bgr8, 60)
+    pipe.start(cfg)
 
     while True:
         t0 = time.time()
@@ -69,24 +76,17 @@ def main():
         color_img = np.asanyarray(color.get_data())
         rgb_img = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB)
 
-        # Wrap frame as a MediaPipe Image
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_img)
-
-        # VIDEO mode requires a monotonically increasing timestamp (ms)
-        frame_timestamp_ms = int((time.time() - start_time) * 1000)
-
         t1 = time.time()
-        result = landmarker.detect_for_video(mp_image, frame_timestamp_ms)
+        result = inference_pose_landmarker(rgb_img)
         t2 = time.time()
 
         annotated = draw_landmarks_on_image(rgb_img, result)
-        annotated_bgr = cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR)
 
         total = time.time() - t0
         print(f"inference: {(t2-t1)*1000:.1f}ms | total: {total*1000:.1f}ms | "
               f"FPS: {1/total:.1f}", end="\r")
 
-        cv2.imshow("Pose (Tasks API)", annotated_bgr)
+        cv2.imshow("Pose (Tasks API)", annotated)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
