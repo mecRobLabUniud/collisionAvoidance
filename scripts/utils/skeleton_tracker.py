@@ -11,7 +11,7 @@ It includes robust depth reading, temporal smoothing of keypoints, and simplifie
 capsule representation of limbs for collision avoidance.
 """
 
-import os
+import mediapipe as mp
 import cv2
 import math
 import time
@@ -28,17 +28,35 @@ logging.getLogger('tensorrt').setLevel(logging.ERROR)
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters
 # ─────────────────────────────────────────────────────────────────────────────
-# TARGET_KEYPOINTS = list(range(17))
-# COCO_SKELETON = [
-#     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-#     (5, 7), (7, 9), (6, 8), (8, 10),
-#     (5, 6), (5, 11), (6, 12), (11, 12),
-#     (11, 13), (13, 15), (12, 14), (14, 16)
-# ]
-# EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+TARGET_KEYPOINTS = list(range(17))
+COCO_SKELETON = [
+    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
+    (5, 7), (7, 9), (6, 8), (8, 10),
+    (5, 6), (5, 11), (6, 12), (11, 12),
+    (11, 13), (13, 15), (12, 14), (14, 16)
+]
+EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 conf_thr = 0.5          # Threshold of confidence for keypoint acceptance (0.0-1.0)
 max_depth_range = 3.0   # Maximum depth range to consider for keypoint validation (meters)
 running = True
+
+
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+pose = mp_pose.Pose(
+    static_image_mode=False,      # False for video/stream (uses tracking between frames)
+    model_complexity=0,           # 0=lite, 1=full, 2=heavy
+    smooth_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5,
+)
+
+# Load image
+image = cv2.imread("/home/lab/Pictures/prova.jpg")
+rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # MediaPipe expects RGB
+annotated = None  # To store the annotated image
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +152,6 @@ class SkeletonTracker:
     # ─────────────────────────────────────────────────────────────────────────────
     # skeleton tracking prediction
     # ─────────────────────────────────────────────────────────────────────────────
-    @chronometer
     def skeleton_tracking(self, model):
         while running and (model in self.started):
             if not self.depth or not self.color:
@@ -142,64 +159,78 @@ class SkeletonTracker:
             else:
                 with self.mutex:
                     color = self.color
-                    depth = self.depth
-
-            if model.model_name == "/home/lab/Desktop/skeleton_tracking/scripts/models/yolo26n-hands.pt":
-                TARGET_KEYPOINTS = list(range(21))
-                COCO_SKELETON = [
-                    (0, 9)
-                ]
-                EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
-            else:
-                TARGET_KEYPOINTS = list(range(17))
-                COCO_SKELETON = [
-                    (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6),
-                    (5, 7), (7, 9), (6, 8), (8, 10),
-                    (5, 6), (5, 11), (6, 12), (11, 12),
-                    (11, 13), (13, 15), (12, 14), (14, 16)
-                ]
-                EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
+                    depth = self.depth              
 
             # Neural network inference
             color_img = np.asanyarray(color.get_data())
-            results = model.predict(color_img, verbose=False)
-            if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
-                person = results[0].keypoints.data[0].cpu().numpy()
-                xy = person[:, :2]
-                conf = person[:, 2]
-                xyz = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
-                for k in TARGET_KEYPOINTS:
-                    if conf[k] < conf_thr:
-                        continue
-                    u, v = float(xy[k, 0]), float(xy[k, 1])
-                    margin = 15
-                    if u < margin or u > self.W - margin or v < margin or v > self.H - margin:
-                        continue
+            t0 = time.time()
+            # results = model.predict(color_img, verbose=False)
 
-                    # Depth reading
-                    z = self.robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
-                    if not math.isfinite(z):
-                        continue
-                    X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
-                    xyz[k] = np.array([X, Y, Z], dtype=np.float32)
+            results = holistic.process(color_img)
 
-                # Temporal filter
-                with self.mutex:
-                    self.xyz = self.smoother.update(xyz, conf, conf_thr)
-                    self.conf = conf
-                    
-                # Image annotation for debugging
-                for (u, v) in EDGES:
-                    if conf[u] >= conf_thr and conf[v] >= conf_thr:
-                        pt1 = (int(xy[u, 0]), int(xy[u, 1]))
-                        pt2 = (int(xy[v, 0]), int(xy[v, 1]))
-                        cv2.line(color_img, pt1, pt2, (200, 200, 200), 2)
-                for k in TARGET_KEYPOINTS:
-                    if conf[k] >= conf_thr:
-                        cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 5, (200, 200, 200), -1)
+            # Draw on a copy (draw in BGR since that's what cv2 will save/show)
+            annotated = image.copy()
+
+            # Face mesh
+            mp_drawing.draw_landmarks(
+                annotated,
+                results.face_landmarks,
+                mp_holistic.FACEMESH_CONTOURS,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
+            )
+
+            # Pose
+            mp_drawing.draw_landmarks(
+                annotated,
+                results.pose_landmarks,
+                mp_holistic.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
+            )
 
             with self.mutex:
-                self.frame = color_img.copy()
+                self.xyz = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
+                self.conf = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
+            
+            # if results and results[0].keypoints is not None and len(results[0].keypoints.data) > 0:
+            #     person = results[0].keypoints.data[0].cpu().numpy()
+            #     xy = person[:, :2]
+            #     conf = person[:, 2]
+            #     xyz = np.full((len(TARGET_KEYPOINTS), 3), np.nan, dtype=np.float32)
+            #     for k in TARGET_KEYPOINTS:
+            #         if conf[k] < conf_thr:
+            #             continue
+            #         u, v = float(xy[k, 0]), float(xy[k, 1])
+            #         margin = 15
+            #         if u < margin or u > self.W - margin or v < margin or v > self.H - margin:
+            #             continue
+# 
+            #         # Depth reading
+            #         z = self.robust_depth_median(depth, u, v, R=6, max_dist=max_depth_range)
+            #         if not math.isfinite(z):
+            #             continue
+            #         X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
+            #         xyz[k] = np.array([X, Y, Z], dtype=np.float32)
+# 
+            #     # Temporal filter
+            #     with self.mutex:
+            #         self.xyz = self.smoother.update(xyz, conf, conf_thr)
+            #         self.conf = conf
+            #         
+            #     # Image annotation for debugging
+            #     for (u, v) in EDGES:
+            #         if conf[u] >= conf_thr and conf[v] >= conf_thr:
+            #             pt1 = (int(xy[u, 0]), int(xy[u, 1]))
+            #             pt2 = (int(xy[v, 0]), int(xy[v, 1]))
+            #             cv2.line(color_img, pt1, pt2, (200, 200, 200), 2)
+            #     for k in TARGET_KEYPOINTS:
+            #         if conf[k] >= conf_thr:
+            #             cv2.circle(color_img, (int(xy[k, 0]), int(xy[k, 1])), 5, (200, 200, 200), -1)
+
+            print(f"YOLOv8-Pose inference time: {time.time() - t0:.3f} seconds", end="\r")
+
+            with self.mutex:
+                self.frame = annotated.copy()
 
 
     # ─────────────────────────────────────────────────────────────────────────────

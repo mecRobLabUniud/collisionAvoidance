@@ -98,7 +98,7 @@ def main():
         # Create trackers
         tracker = SkeletonTracker(device.get_info(rs.camera_info.serial_number))
         tracker.start(model)
-        tracker.start(hand_model)
+        # tracker.start(hand_model)
         trackers.append(tracker)
 
         serial = tracker.get_serial_number()
