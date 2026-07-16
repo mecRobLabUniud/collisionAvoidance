@@ -4,17 +4,21 @@
 ░█▀▄░█▀█░▀█▀░█▀█░░░█▄█░█▀▀░█▀▄░█▀▀░▀█▀░█▀█░█▀▀
 ░█░█░█▀█░░█░░█▀█░░░█░█░█▀▀░█▀▄░█░█░░█░░█░█░█░█
 ░▀▀░░▀░▀░░▀░░▀░▀░░░▀░▀░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
-Merging and re-shaping the skeleton according to the following keypoint convention:
-0: Nose 1: Left Eye  2: Right Eye  3: Left Ear   4: Right Ear
-5: Left Shoulder   6: Right Shoulder  7: Left Elbow 8: Right Elbow   
-9: Left Wrist  10: Right Wrist   11: Left Hip   12: Right Hip  
-13: Left Knee 14: Right Knee   15: Left Ankle   16: Right Ankle 
+Merging and re-shaping the skeleton.
+Incoming data has mediapipe configuration:
+0 - nose                9 - mouth (left)        18 - right pinky      27 - left ankle                     
+1 - left eye (inner)    10 - mouth (right)      19 - left index       28 - right ankle            
+2 - left eye            11 - left shoulder      20 - right index      29 - left heel      
+3 - left eye (outer)    12 - right shoulder     21 - left thumb       30 - right heel            
+4 - right eye (inner)   13 - left elbow         22 - right thumb      31 - left foot index         
+5 - right eye           14 - right elbow        23 - left hip         32 - right foot index  
+6 - right eye (outer)   15 - left wrist         24 - right hip               
+7 - left ear            16 - right wrist        25 - left knee          
+8 - right ear           17 - left pinky         26 - right knee     
 """
 
 import sys
 import numpy as np
-import time
-import signal
 from utils.kalman_filter import SimpleMerger, KalmanFilter3D, KalmanFilter6D, ImprovedKalmanFilter6D
 from utils.data_transmitter import DataTransmitter
 from utils.decorators import chronometer, set_rate
@@ -27,26 +31,34 @@ running = True
 topic = "SKEL"
 interfaces = None
 n_devices = 0
-skel_len = 17
-kfs = [KalmanFilter6D() for _ in range(skel_len)]
+skel_len = 0
+kfs = None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Re-shaping skeleton structure
 # ─────────────────────────────────────────────────────────────────────────────
 def reshape_structure(skeleton):
     new_skeleton = []
-    head_markers = [wp for wp in skeleton[3:5] if not np.isnan(wp[0])]
+    head_markers = [wp for wp in skeleton[7:9] if not np.isnan(wp[0])]
     head = [[head_markers[i][j] for i in range(len(head_markers))] for j in range(3)]
     new_skeleton.append([sum(head[i])/len(head[i]) if len(head[i])>0 else np.nan for i in range(3)])
-    for i in range(5, 11):
+    for i in range(11, 17):
         new_skeleton.append(skeleton[i]) 
-    upper_torso_markers = [wp for wp in skeleton[5:7] if not np.isnan(wp[0])]
-    lower_torso_markers = [wp for wp in skeleton[11:13] if not np.isnan(wp[0])]
+
+    left_hand_markers = [wp for wp in [skeleton[17], skeleton[19]] if not np.isnan(wp[0])]
+    left_hand = [[left_hand_markers[i][j] for i in range(len(left_hand_markers))] for j in range(3)]
+    new_skeleton.append([sum(left_hand[i])/len(left_hand[i]) if len(left_hand[i])>0 else np.nan for i in range(3)])
+    right_hand_markers = [wp for wp in [skeleton[18], skeleton[20]] if not np.isnan(wp[0])]
+    right_hand = [[right_hand_markers[i][j] for i in range(len(right_hand_markers))] for j in range(3)]
+    new_skeleton.append([sum(right_hand[i])/len(right_hand[i]) if len(right_hand[i])>0 else np.nan for i in range(3)])
+    
+    upper_torso_markers = [wp for wp in skeleton[11:13] if not np.isnan(wp[0])]
+    lower_torso_markers = [wp for wp in skeleton[23:25] if not np.isnan(wp[0])]
     upper_torso = [[upper_torso_markers[i][j] for i in range(len(upper_torso_markers))] for j in range(3)]
     lower_torso = [[lower_torso_markers[i][j] for i in range(len(lower_torso_markers))] for j in range(3)]
     new_skeleton.append([sum(upper_torso[i])/len(upper_torso[i]) if len(upper_torso[i])>0 else np.nan for i in range(3)])
     new_skeleton.append([sum(lower_torso[i])/len(lower_torso[i]) if len(lower_torso[i])>0 else np.nan for i in range(3)])
-    for i in range(11, 17):
+    for i in range(23, 33):
         new_skeleton.append(skeleton[i]) 
 
     new_skeleton = np.asanyarray(new_skeleton)
@@ -58,8 +70,6 @@ def reshape_structure(skeleton):
 # ─────────────────────────────────────────────────────────────────────────────
 @set_rate(60)
 def merging(dtrs, dts):
-    # skeletons = [dtr.receive_skeleton_data()[0] for dtr in dtrs]
-    # confidences = [dtr.receive_skeleton_data()[1] for dtr in dtrs]
     skeletons = []
     confidences = []
     for dtr in dtrs:
@@ -86,7 +96,7 @@ def merging(dtrs, dts):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global n_devices
+    global n_devices, skel_len, kfs
     arg1 = sys.argv[1] if len(sys.argv) > 1 else None
     if arg1 is None:
         raise ValueError("No argument provided. Enter the number of cameras")   
@@ -99,6 +109,10 @@ def main():
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     dts = DataTransmitter("sender", 10, "MERGED", port=7000)
     print("Merging started correctly\n")
+
+    skeleton, _ = dtrs[0].receive_skeleton_data()
+    skel_len = len(skeleton)
+    kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
     # Main loop
     while running:

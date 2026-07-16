@@ -11,9 +11,9 @@ const camera = {
 const scene = {
     camera: camera,
     aspectmode: 'cube', // 'cube' makes axes equal (x=y=z). Use 'data' to match data ranges.
-    xaxis: { title: 'X', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 },
-    yaxis: { title: 'Y', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 },
-    zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 }
+    xaxis: { title: 'X', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 },
+    yaxis: { title: 'Y', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 },
+    zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 }
 };
 
 const size = 1000;
@@ -110,32 +110,32 @@ function capsuleMesh(p1, p2, radius, opacity, rula = true, segments = 16) {
         }
     }
 
-    let caps_color = 'rgb(190, 190, 190)';
+    let caps_color = '#aaaaaa';
     if (rula) {
         switch (rula_score) {
             case 1:
-                caps_color = 'rgb(30, 209, 225)';
+                caps_color = '#9CCB3B';
                 break;
             case 2:
-                caps_color = 'rgb(30, 209, 225)';
+                caps_color = '#9CCB3B';
                 break;
             case 3:
-                caps_color = 'rgb(53, 225, 30)';
+                caps_color = '#FAF04C';
                 break;
             case 4:
-                caps_color = 'rgb(53, 225, 30)';
+                caps_color = '#FAF04C';
                 break;
             case 5:
-                caps_color = 'rgb(225, 205, 30)';
+                caps_color = '#F3714D';
                 break;
             case 6:
-                caps_color = 'rgb(225, 205, 30)';
+                caps_color = '#F3714D';
                 break;
             case 7:
-                caps_color = 'rgb(225, 33, 30)';
+                caps_color = '#F04C4E';
                 break;
             default:
-                caps_color = 'rgb(190, 190, 190)';
+                caps_color = '#aaaaaa';
         }
     }
 
@@ -153,8 +153,8 @@ function capsuleMesh(p1, p2, radius, opacity, rula = true, segments = 16) {
 function update_plot() {
     socket.on('update_plot', function (point) {
         const data = [];
-        const COCO_SKELETON = [[0, 7], [1, 3], [2, 4], [3, 5], [4, 6], [7, 8], [9, 11], [10, 12], [11, 13], [12, 14]];
-        const r_sw_h = [0.16, 0.05, 0.05, 0.06, 0.06, 0.15, 0.1, 0.1, 0.08, 0.08];
+        const COCO_SKELETON = [[0, 9], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [6, 8], [9, 10], [11, 13], [12, 14], [13, 15], [14, 16], [17, 19], [18, 20]];
+        const r_sw_h = [0.16, 0.06, 0.06, 0.06, 0.06, 0.1, 0.1, 0.15, 0.1, 0.1, 0.08, 0.08, 0.05, 0.05];
         const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
         const r_sw_r = point.radius;
         rv = [0.085, 0.085, 0.06, 0.065];

@@ -148,17 +148,34 @@ class SkeletonTracker:
             results = inference_pose_landmarker(rgb_img)
             annotated = draw_landmarks_on_image(rgb_img, results)
             
-            if not results.pose_world_landmarks == []:
-                person = results.pose_world_landmarks[0]
+            if not results.pose_landmarks == []:
+                person = results.pose_landmarks[0]
                 xyz = np.full((len(person), 3), np.nan, dtype=np.float32)
                 conf = np.full((len(person)), np.nan, dtype=np.float32)
                 for k, landmark in enumerate(person):
-                    xyz[k] = np.array([landmark.x, landmark.y, landmark.z], dtype=np.float32)
+                    u = landmark.x*self.W
+                    v = landmark.y*self.H
+                    margin = 15
+                    if u < margin or u > (self.W - margin) or v < margin or v > (self.H - margin):
+                        continue
+
+                    # Depth reading
+                    z = self.robust_depth_median(depth, u, v)
+                    print('------------------------------')
+                    print(z)
+                    # if not math.isfinite(z):
+                    #     continue
+                    X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
+                    print(X,Y,Z)
+
+                    xyz[k] = np.array([X, Y, Z], dtype=np.float32)
                     conf[k] = landmark.visibility
 
                 with self.mutex:
                     self.xyz = self.smoother.update(xyz, conf, conf_thr)
                     self.conf = conf
+
+            
 
             #     person = results[0].keypoints.data[0].cpu().numpy()
             #     xy = person[:, :2]
@@ -184,6 +201,25 @@ class SkeletonTracker:
             #         self.xyz = self.smoother.update(xyz, conf, conf_thr)
             #         self.conf = conf
 
+
+
+
+
+            # if not results.pose_world_landmarks == []:
+            #     person = results.pose_world_landmarks[0]
+            #     xyz = np.full((len(person), 3), np.nan, dtype=np.float32)
+            #     conf = np.full((len(person)), np.nan, dtype=np.float32)
+            #     for k, landmark in enumerate(person):
+            #         xyz[k] = np.array([landmark.x, landmark.y, landmark.z], dtype=np.float32)
+            #         conf[k] = landmark.visibility
+# 
+            #     with self.mutex:
+            #         self.xyz = self.smoother.update(xyz, conf, conf_thr)
+            #         self.conf = conf
+
+
+
+
             with self.mutex:
                 self.frame = annotated.copy()
 
@@ -191,7 +227,7 @@ class SkeletonTracker:
     # ─────────────────────────────────────────────────────────────────────────────
     # Robust depth reading around a pixel 
     # ─────────────────────────────────────────────────────────────────────────────
-    def robust_depth_median(self, depth_frame, u, v, R=6, max_dist=3.0):
+    def robust_depth_median(self, depth_frame, u, v, R=6, max_dist=5.0):
         w, h = depth_frame.get_width(), depth_frame.get_height()
         uu, vv = int(round(u)), int(round(v)) # pixel centrali, round() arrotonda al più vicino intero
         zs = []

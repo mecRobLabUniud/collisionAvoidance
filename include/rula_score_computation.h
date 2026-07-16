@@ -36,13 +36,16 @@ double angleDeg(const Vec3& a, const Vec3& b);
 
 // Keypoint indices
 enum KP {
-    HEAD=0, L_SHOULDER=1, R_SHOULDER=2,
-    L_ELBOW=3,  R_ELBOW=4,
-    L_WRIST=5,  R_WRIST=6,
-    UPPER_TORSO=7, LOWER_TORSO=8,
-    L_HIP=9,   R_HIP=10,
-    L_KNEE=11, R_KNEE=12,
-    L_ANKLE=13, R_ANKLE=14
+    HEAD=0,         L_SHOULDER=1,   R_SHOULDER=2,
+    L_ELBOW=3,      R_ELBOW=4,
+    L_WRIST=5,      R_WRIST=6,
+    L_HAND=7,       R_HAND=8,
+    UPPER_TORSO=9,  LOWER_TORSO=10,
+    L_HIP=11,       R_HIP=12,
+    L_KNEE=13,      R_KNEE=14,
+    L_ANKLE=15,     R_ANKLE=16,
+    L_HEEL=17,      R_HEEL=18,
+    L_FOOT=19,      R_FOOT=20
 };
 
 using Skeleton = std::vector<std::array<double, 3>>;

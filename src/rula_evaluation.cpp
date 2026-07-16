@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <vector>
 
-// #include "skeleton_receiver.h"
 #include "rula_score_computation.h"
 #include "data_transmitter.hpp"
 
@@ -114,7 +113,7 @@ int main() {
 
             auto skeleton = dtr.receive_skeleton_data().first;
             RULAResult result_R = computeRULA(skeleton, flags, 'R', false);
-            RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
+            // RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
 
             // result_R.print();
 
@@ -125,7 +124,7 @@ int main() {
             // std::cout << "Score L: " << result_L.grandScore << "  -  ";
             // std::cout << "Elapsed time: " << elapsed_ms << "ms" << "\r";
 
-            std::array<int, 2> rula_score = {result_R.grandScore, result_L.grandScore};
+            std::array<int, 2> rula_score = {result_R.grandScore}; // , result_L.grandScore};
             dts.send_rula_score(rula_score);
             // auto score = dtr_rula.receive_rula_score();
 
@@ -138,40 +137,3 @@ int main() {
 
     return 0;
 }
-
-
-
-// int main()
-// {
-//     Skeleton kp = {
-//         { 0.32561093,  0.58366576,  0.88077476},
-//         { 0.25705159,  0.75563931,  0.69358229},
-//         { 0.33072013,  0.43864895,  0.65664771},
-//         { 0.21092594,  1.059997  ,  0.64530905},
-//         { 0.33662338,  0.44507781,  0.38093787},
-//         { 0.22832004,  1.31962699,  0.68518367},
-//         { 0.36859576,  0.38922919,  0.10281177},
-//         { 0.29388586,  0.59714413,  0.675115  },
-//         { 0.3453726 ,  0.6424219 ,  0.14056365},
-//         { 0.31562263,  0.73525941,  0.15264951},
-//         { 0.37512257,  0.54958439,  0.1284778 },
-//         { 0.27161685,  0.73644812, -0.27857493},
-//         { 0.2757422 ,  0.50638936, -0.36591824},
-//         { 0.27161685,  0.73644812, -0.6857493},
-//         { 0.2757422 ,  0.50638936, -0.6591824},
-//     };
-// 
-// 
-//     AdjustmentFlags flags;
-//     flags.isRepeated    = false;   // task is repetitive
-//     flags.forceScoreA   = 0;      // 2-10 kg load, intermittent
-//     flags.forceScoreB   = 0;
-// 
-//     RULAResult resultR = computeRULA(kp, flags, 'R', false);
-//     resultR.print();
-// 
-//     RULAResult resultL = computeRULA(kp, flags, 'L', false);
-//     resultL.print();
-// 
-//     return 0;
-// }

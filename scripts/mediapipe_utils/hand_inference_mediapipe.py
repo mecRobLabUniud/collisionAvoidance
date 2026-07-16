@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import os
 import pyrealsense2 as rs
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -8,9 +9,11 @@ from mediapipe.tasks.python import vision
 from mediapipe.framework.formats import landmark_pb2
 from mediapipe import solutions
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
 # --- Setup HandLandmarker (Tasks API) ---
 base_options = python.BaseOptions(
-    model_asset_path='hand_landmarker.task',
+    model_asset_path=f'{current_dir}/../models/hand_landmarker.task',
     delegate=python.BaseOptions.Delegate.GPU,  # falls back to CPU if GPU unavailable
 )
 options = vision.HandLandmarkerOptions(

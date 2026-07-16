@@ -99,26 +99,26 @@ int scoreLowerArm(const Vec3& shoulder, const Vec3& elbow,
 }
 
 int scoreWrist(const Vec3& elbow, const Vec3& wrist,
-                const Vec3& shoulder,
+                const Vec3& hand,
                 const AdjustmentFlags& f)
 {
-    // // Approximate wrist flexion: angle between forearm and world vertical
-    // Vec3 forearm = (wrist - elbow).normalized();
-    // double angFromVertical = angleDeg(forearm, WORLD_UP);
-//
-    // std::cout << "scoreWrist angle: " << angFromVertical << "°" << std::endl;
-//
-    // // When forearm is horizontal (90° from up) and wrist is neutral,
-    // // deviation from 90° approximates flexion/extension.
-    // double approxFlexExt = std::abs(angFromVertical - 90.0);
-//
-    // int score;
-    // if      (approxFlexExt <= 5)  score = 1;   // near neutral
-    // else if (approxFlexExt <= 15) score = 2;
-    // else                          score = 3;
-//
-    // if (f.wristDeviated) ++score;
-    int score = 1;
+    // Approximate wrist flexion: angle between forearm and world vertical
+    Vec3 forearm = (elbow - wrist).normalized();
+    Vec3 handLine = (hand - wrist).normalized();
+    double ang = angleDeg(forearm, handLine);
+
+    std::cout << "scoreWrist angle: " << ang << "°" << "\r";
+
+    // When forearm is horizontal (90° from up) and wrist is neutral,
+    // deviation from 90° approximates flexion/extension
+    double flexion = 180.0 - ang;
+
+    int score;
+    if      (flexion <= 5)  score = 1;   // near neutral
+    else if (flexion <= 15) score = 2;
+    else                          score = 3;
+
+    if (f.wristDeviated) ++score;
 
     return score;
 }
@@ -387,14 +387,16 @@ RULAResult computeRULA(const Skeleton& kp,
     RULAResult r{};
 
     // Select left or right keypoints
-    int shoulder_idx = (side == 'L') ? L_SHOULDER : R_SHOULDER;
-    int elbow_idx    = (side == 'L') ? L_ELBOW    : R_ELBOW;
-    int wrist_idx    = (side == 'L') ? L_WRIST    : R_WRIST;
-    int hip_idx      = (side == 'L') ? L_HIP      : R_HIP;
+    int shoulder_idx    = (side == 'L') ? L_SHOULDER    : R_SHOULDER;
+    int elbow_idx       = (side == 'L') ? L_ELBOW       : R_ELBOW;
+    int wrist_idx       = (side == 'L') ? L_WRIST       : R_WRIST;
+    int hand_idx        = (side == 'L') ? L_HAND        : R_HAND;
+    int hip_idx         = (side == 'L') ? L_HIP         : R_HIP;
 
     const Vec3 shoulder    = toVec3(kp[shoulder_idx]);
     const Vec3 elbow       = toVec3(kp[elbow_idx]);
     const Vec3 wrist       = toVec3(kp[wrist_idx]);
+    const Vec3 hand       = toVec3(kp[hand_idx]);
     const Vec3 hip         = toVec3(kp[hip_idx]);
     const Vec3 upperTorso  = toVec3(kp[UPPER_TORSO]);
     const Vec3 lowerTorso  = toVec3(kp[LOWER_TORSO]);
@@ -403,7 +405,7 @@ RULAResult computeRULA(const Skeleton& kp,
     // --- Group A ---
     r.upperArmScore   = scoreUpperArm(shoulder, elbow, upperTorso, lowerTorso, f);
     r.lowerArmScore   = scoreLowerArm(shoulder, elbow, wrist, f);
-    r.wristScore      = scoreWrist(elbow, wrist, shoulder, f);
+    r.wristScore      = scoreWrist(elbow, wrist, hand, f);
     r.wristTwistScore = scoreWristTwist(wristAtEndOfRange);
 
     r.postureScoreA   = lookupGroupA(r.upperArmScore, r.lowerArmScore,

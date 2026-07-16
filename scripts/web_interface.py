@@ -6,10 +6,19 @@
 ░▀░▀░▀▀▀░▀▀░░░░▀▀▀░▀░▀░░▀░░▀▀▀░▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀
 
 User interface for the rendering of the 3D reconstruction
-of the skeleton, according to the new keypoint strcture:
-0: Head 1: Left Shoulder   2: Right Shoulder  3: Left Elbow 4: Right Elbow   
-5: Left Wrist  6: Right Wrist   7: Upper torso   8: Lower torso
-9: Left Hip   10: Right Hip  11: Left Knee 12: Right Knee   13: Left Ankle   14: Right Ankle 
+of the skeleton, according to the new keypoint strcture.
+Incoming data has custom configuration:
+0 - head                11 - left hip
+1 - left shoulder       12 - right hip
+2 - right shoulder      13 - left knee
+3 - left elbow          14 - right knee
+4 - right elbow         15 - left ankle
+5 - left wrist          16 - right ankle
+6 - right wrist         17 - left heel               
+7 - left hand           18 - right heel         
+8 - right hand          19 - left foot
+9 - upper torso         20 - right foot
+10 - lower torso    
 """
 
 import webbrowser
@@ -19,15 +28,11 @@ import sys
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 from utils.data_transmitter import DataTransmitter
-from utils.decorators import chronometer, set_rate
+from utils.decorators import set_rate
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters 
 # ─────────────────────────────────────────────────────────────────────────────
-TARGET_KEYPOINTS = list(range(15))
-COCO_SKELETON = [(0, 7), (1, 3), (2, 4), (3, 5), 
-                (4, 6), (7, 8), (9, 11), (10, 12), (11, 13), (12, 14)]
-EDGES = [(a, b) for (a, b) in COCO_SKELETON if a in TARGET_KEYPOINTS and b in TARGET_KEYPOINTS]
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 dtrs = None
@@ -60,6 +65,7 @@ def rula_thread():
 def send_skeleton_data():
     try:
         merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+        print(merged_skeleton)
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
