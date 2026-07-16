@@ -81,14 +81,22 @@ def merging(dtrs, dts):
             skeletons.append(skeleton)
             confidences.append(confidence)
 
+    
+    
     merged_skeleton = []
     for i in range(skel_len):
         skeleton_marker = [skeleton[i] for skeleton in skeletons if not skeleton==None]
         confidence_marker = [confidence[i] for confidence in confidences if not confidence==None]
         merged_skeleton.append(kfs[i].step(skeleton_marker, confidence_marker).tolist())
 
+        print(skeleton_marker, confidence_marker)
+    
     reshaped_skeleton = reshape_structure(merged_skeleton)    
     merged_confidence = np.ones(skel_len).astype(np.float32)
+
+    # print('-----------------------')
+    # print(merged_skeleton)
+
     dts.send_skeleton_data(reshaped_skeleton, merged_confidence)
 
 

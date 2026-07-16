@@ -70,7 +70,7 @@ def tracking(dtss, trackers, rotation_matrices):
         # Write skeleton data into socket
         if not skeleton is None and not confidence is None:
             skeleton = transform_points(rotation_matrix, skeleton.astype(np.float64)).astype(np.float32)
-            confidence = confidence.astype(np.float32)        
+            confidence = confidence.astype(np.float32)
 
             dts.send_skeleton_data(skeleton, confidence)
 

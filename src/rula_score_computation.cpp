@@ -107,7 +107,7 @@ int scoreWrist(const Vec3& elbow, const Vec3& wrist,
     Vec3 handLine = (hand - wrist).normalized();
     double ang = angleDeg(forearm, handLine);
 
-    std::cout << "scoreWrist angle: " << ang << "°" << "\r";
+    // std::cout << "scoreWrist angle: " << ang << "°" << "\r";
 
     // When forearm is horizontal (90° from up) and wrist is neutral,
     // deviation from 90° approximates flexion/extension

@@ -65,7 +65,7 @@ def rula_thread():
 def send_skeleton_data():
     try:
         merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
-        print(merged_skeleton)
+        
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]

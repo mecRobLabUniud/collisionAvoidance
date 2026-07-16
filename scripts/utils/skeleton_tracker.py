@@ -161,12 +161,10 @@ class SkeletonTracker:
 
                     # Depth reading
                     z = self.robust_depth_median(depth, u, v)
-                    print('------------------------------')
-                    print(z)
+
                     # if not math.isfinite(z):
                     #     continue
                     X, Y, Z = rs.rs2_deproject_pixel_to_point(self.intr, [u, v], z)
-                    print(X,Y,Z)
 
                     xyz[k] = np.array([X, Y, Z], dtype=np.float32)
                     conf[k] = landmark.visibility
