@@ -151,7 +151,7 @@ class SkeletonTracker:
             if not results.pose_landmarks == []:
                 person = results.pose_landmarks[0]
                 xyz = np.full((len(person), 3), np.nan, dtype=np.float32)
-                conf = np.full((len(person)), np.nan, dtype=np.float32)
+                conf = np.full((len(person)), 0, dtype=np.float32)
                 for k, landmark in enumerate(person):
                     u = landmark.x*self.W
                     v = landmark.y*self.H
