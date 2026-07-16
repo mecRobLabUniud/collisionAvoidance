@@ -11,9 +11,9 @@ const camera = {
 const scene = {
     camera: camera,
     aspectmode: 'cube', // 'cube' makes axes equal (x=y=z). Use 'data' to match data ranges.
-    xaxis: { title: 'X', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 },
-    yaxis: { title: 'Y', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 },
-    zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-3, 3], nticks: 5 }
+    xaxis: { title: 'X', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 },
+    yaxis: { title: 'Y', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 },
+    zaxis: { title: 'Z', backgroundcolor: '#fff', gridcolor: '#ddd', zerolinecolor: '#444', range: [-2, 2], nticks: 5 }
 };
 
 const size = 1000;
