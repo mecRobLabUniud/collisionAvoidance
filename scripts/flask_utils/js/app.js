@@ -1,8 +1,6 @@
-/* =========================================================
-   Panda modified-DH parameters (Franka Emika official table)
-   columns: a_{i-1} [m], alpha_{i-1} [rad], d_i [m]
-   Verified against franka_ros/franka_description xacro joint origins.
-   ========================================================= */
+// ─────────────────────────────────────────────────────────────────────────────
+// Parameters
+// ─────────────────────────────────────────────────────────────────────────────
 const DH = [
   { a:0,       alpha:0,          d:0.333, name:'J1', mesh:'link1' },
   { a:0,       alpha:-Math.PI/2, d:0,     name:'J2', mesh:'link2' },
@@ -31,6 +29,16 @@ let q = READY_POSE.slice();
 let gripperOpening = 0.04;
 let HAND = false;
 
+
+
+
+
+const socket = io();
+
+
+
+
+
 /* warn early if opened directly as a file:// page — ColladaLoader needs XHR,
    which browsers block on the file:// protocol. */
 if (location.protocol === 'file:') {
@@ -40,7 +48,7 @@ if (location.protocol === 'file:') {
 }
 
 /* ---------- three.js scaffold ---------- */
-const app = document.getElementById('app');
+const app = document.getElementById('plot');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0c0f0d);
 scene.fog = new THREE.Fog(0x0c0f0d, 3, 9);
@@ -144,9 +152,7 @@ Promise.all(MESH_FILES.map(n =>
   document.getElementById('loading').style.opacity = '0';
   setTimeout(()=> document.getElementById('loading').style.display = 'none', 300);
 
-  buildJointUI();
-  updateKinematics();
-  animate();
+  
 }).catch(err=>{
   loadingTxt.innerHTML = 'Failed to load meshes.<br>Check the browser console and that meshes/visual/*.dae exist.';
   document.querySelector('#loading .spin').style.display = 'none';
@@ -234,63 +240,13 @@ function updateKinematics(){
   // TCP readout — hand frame, 0.1034m along its z (franka_hand default tcp offset)
   const tcpMat = handMat4.clone().multiply(new THREE.Matrix4().makeTranslation(0,0,0.1034));
   const p = new THREE.Vector3().setFromMatrixPosition(tcpMat);
-  document.getElementById('readout').innerHTML =
-    `x <b>${p.x.toFixed(3)}</b> m<br>y <b>${p.z.toFixed(3)}</b> m<br>z (up) <b>${p.y.toFixed(3)}</b> m`;
+  // document.getElementById('readout').innerHTML =
+  //   `x <b>${p.x.toFixed(3)}</b> m<br>y <b>${p.z.toFixed(3)}</b> m<br>z (up) <b>${p.y.toFixed(3)}</b> m`;
 }
 
-/* ---------- UI: joint sliders (built after meshes finish loading) ---------- */
-const sliders = [];
-function buildJointUI(){
-  const jointsDiv = document.getElementById('joints');
-  LIMITS.forEach((lim,i)=>{
-    const row = document.createElement('div');
-    row.className = 'joint-row';
-    row.innerHTML = `
-      <div class="label-line"><span class="jname">${DH[i].name}</span><span class="jval" id="jval${i}">0.0°</span></div>
-      <input type="range" id="jslider${i}" min="${lim[0]}" max="${lim[1]}" step="0.005" value="${q[i]}">
-    `;
-    jointsDiv.appendChild(row);
-    const slider = row.querySelector('input');
-    slider.addEventListener('input', ()=>{
-      q[i] = parseFloat(slider.value);
-      document.getElementById(`jval${i}`).textContent = (q[i]*180/Math.PI).toFixed(1)+'°';
-      updateKinematics();
-    });
-    sliders.push(slider);
-  });
-}
 
-function applyPose(pose){
-  q = pose.slice();
-  q.forEach((v,i)=>{
-    sliders[i].value = v;
-    document.getElementById(`jval${i}`).textContent = (v*180/Math.PI).toFixed(1)+'°';
-  });
-  updateKinematics();
-}
 
-document.getElementById('btnReady').addEventListener('click', ()=>applyPose(READY_POSE));
-document.getElementById('btnZero').addEventListener('click', ()=>applyPose(ZERO_POSE));
-document.getElementById('btnRandom').addEventListener('click', ()=>{
-  const rp = LIMITS.map(([lo,hi])=> lo + Math.random()*(hi-lo));
-  applyPose(rp);
-});
 
-const gripSlider = document.getElementById('gripSlider');
-const gripVal = document.getElementById('gripVal');
-gripSlider.addEventListener('input', ()=>{
-  gripperOpening = parseFloat(gripSlider.value);
-  gripVal.textContent = (gripperOpening*2*1000).toFixed(0)+' mm';
-  updateKinematics();
-});
-
-document.getElementById('toggleGrid').addEventListener('change', e=>{ grid.visible = e.target.checked; });
-document.getElementById('toggleFrames').addEventListener('change', e=>{
-  frameHelpers.forEach(f=>f.visible = e.target.checked);
-  flangeHelper.visible = e.target.checked;
-});
-let spin = false;
-document.getElementById('toggleSpin').addEventListener('change', e=>{ spin = e.target.checked; });
 
 /* ---------- camera orbit (manual, no external deps) ---------- */
 let camDist = 1.7, camTheta = 0.9, camPhi = 1.15, camTarget = new THREE.Vector3(0,0.35,0);
@@ -334,9 +290,77 @@ renderer.domElement.addEventListener('wheel', e=>{
 /* ---------- render loop ---------- */
 function animate(){
   requestAnimationFrame(animate);
-  if (spin){ camTheta += 0.003; updateCamera(); }
+  // if (spin){ camTheta += 0.003; updateCamera(); }
   renderer.render(scene, camera);
 }
 
 resize();
 updateCamera();
+
+
+
+
+
+
+
+
+
+
+
+
+
+function update_plot() {
+  socket.on('update_plot', function (point) {
+      q = point.q;
+      document.getElementById("hint").innerHTML = q;
+      updateKinematics();
+      
+    }); 
+}
+
+animate();
+
+
+
+
+
+
+setTimeout(update_plot, 1 / 30 * 1000);
+setTimeout(update_stream1, 1 / 30 * 1000);
+setTimeout(update_stream2, 1 / 30 * 1000);
+setTimeout(update_stream3, 1 / 30 * 1000);
+setTimeout(update_stream4, 1 / 30 * 1000);
+
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Streaming updates
+// ─────────────────────────────────────────────────────────────────────────────
+function update_stream1() {
+    socket.on('update_stream1', function (data) {
+        document.getElementById('image1').src = data.frame;
+    });
+}
+
+function update_stream2() {
+    socket.on('update_stream2', function (data) {
+        document.getElementById('image2').src = data.frame;
+    });
+}
+
+function update_stream3() {
+    socket.on('update_stream3', function (data) {
+        document.getElementById('image3').src = data.frame;
+    });
+}
+
+function update_stream4() {
+    socket.on('update_stream4', function (data) {
+        document.getElementById('image4').src = data.frame;
+    });
+}
+
+
+
+

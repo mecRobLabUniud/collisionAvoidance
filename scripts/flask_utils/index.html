@@ -5,53 +5,38 @@
 <title>Panda — Franka Emika DAE Viewer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/ColladaLoader.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
-  <div id="loading"><div class="spin"></div><div class="txt" id="loadingTxt">Loading Franka mesh library…</div></div>
+<div style="display:flex; height:1000px">
+  <div id="plot">
+    <div id="loading"><div class="spin"></div><div class="txt" id="loadingTxt">Loading Franka mesh library…</div></div>
 
-  <div id="hud">
-    <div class="tag">FRANKA EMIKA · 7-DOF</div>
-    <h1>Panda DAE Viewer</h1>
-    <div class="sub">Real visual meshes (franka_description) · modified-DH kinematics</div>
+    <div id="hud">
+      <div class="tag">FRANKA EMIKA · 7-DOF</div>
+      <h1>Panda DAE Viewer</h1>
+      <div class="sub">Real visual meshes (franka_description) · modified-DH kinematics</div>
+    </div>
+    <div id="hint"></div>
   </div>
-  <div id="hint">drag = orbit &nbsp;·&nbsp; right-drag = pan &nbsp;·&nbsp; scroll = zoom</div>
 
-  <div id="panel">
-    <h2>Joint Angles</h2>
-    <div id="joints"></div>
-
-    <div class="divider"></div>
-
-    <h2>Poses</h2>
-    <div class="btn-row">
-      <button id="btnReady" class="primary">Ready</button>
-      <button id="btnZero">Zero</button>
-      <button id="btnRandom">Random</button>
+  <div style="width:30%; height:100%">
+    <div>
+      <img id="image1" src="prova.jpg" style="max-width:100%;">
     </div>
-
-    <div class="divider"></div>
-
-    <h2>Gripper</h2>
-    <div class="joint-row">
-      <div class="label-line"><span class="jname">Opening</span><span class="jval" id="gripVal">80 mm</span></div>
-      <input type="range" id="gripSlider" min="0" max="0.04" step="0.001" value="0.04">
+    <div>
+      <img id="image2" src="" style="max-width:100%;">
     </div>
-
-    <div class="divider"></div>
-
-    <h2>Display</h2>
-    <div class="toggle-row"><span>Grid floor</span><input type="checkbox" id="toggleGrid" checked></div>
-    <div class="toggle-row"><span>Joint axes</span><input type="checkbox" id="toggleFrames"></div>
-    <div class="toggle-row"><span>Auto-rotate</span><input type="checkbox" id="toggleSpin"></div>
-
-    <div class="divider"></div>
-
-    <h2>Flange Pose</h2>
-    <div id="readout">x —<br>y —<br>z —</div>
+    <div>
+      <img id="image3" src="" style="max-width:100%;">
+    </div>
+    <div>
+      <img id="image4" src="" style="max-width:100%;">
+    </div>
   </div>
 </div>
+
 
 <script src="js/app.js"></script>
 </body>

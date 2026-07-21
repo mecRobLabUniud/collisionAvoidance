@@ -43,6 +43,8 @@ dtrs = None
 in_port = 7000
 topic = "SKEL"
 use_robot = False
+cnt = 0.0
+state = 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +69,7 @@ def rula_thread():
 # ─────────────────────────────────────────────────────────────────────────────
 @set_rate(30)
 def send_skeleton_data():
+    global cnt, state
     try:
         merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
         
@@ -77,6 +80,7 @@ def send_skeleton_data():
         if use_robot:
             robot = dtrs[-3].receive_skeleton_data()[0]
             caps_radius = dtrs[-3].receive_skeleton_data()[1]
+
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot]
             z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot]
@@ -84,8 +88,19 @@ def send_skeleton_data():
 
             msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "radius": radius}
         else:
-            msg = {"x": x, "y": y, "z": z}
+            q = [cnt, -3.14/4, 0, -3*3.14/4, 0, 3.14/2, 3.14/4]
+            msg = {"x": x, "y": y, "z": z, "q": q}
         socketio.emit("update_plot", msg)
+        if cnt < -2:
+            state = 1
+        if cnt > 2:
+            state = 0
+
+        if state:
+            cnt+=0.1
+        else:
+            cnt-=0.1
+
         
     except Exception as e:
         print(f"Skeleton thread error: {e}")
