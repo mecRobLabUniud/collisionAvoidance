@@ -1,14 +1,8 @@
-// data_transmitter.hpp
-//
-// C++ translation of the Python DataTransmitter / SharedMemoryManager module.
-//
-// Dependencies:
-//   - libzmq + cppzmq        (sudo apt install libzmq3-dev, header-only cppzmq)
-//   - OpenCV                 (sudo apt install libopencv-dev)
-//   - nlohmann/json          (sudo apt install nlohmann-json3-dev)
-//   - POSIX shared memory    (shm_open/mmap, part of librt/libpthread on Linux)
-//
-// Link with: -lzmq -lopencv_core -lopencv_imgcodecs -lpthread -lrt
+/*
+░█▀▄░█▀█░▀█▀░█▀█░░░▀█▀░█▀▄░█▀█░█▀█░█▀▀░█▄█░▀█▀░▀█▀░▀█▀░█▀▀░█▀▄
+░█░█░█▀█░░█░░█▀█░░░░█░░█▀▄░█▀█░█░█░▀▀█░█░█░░█░░░█░░░█░░█▀▀░█▀▄
+░▀▀░░▀░▀░░▀░░▀░▀░░░░▀░░▀░▀░▀░▀░▀░▀░▀▀▀░▀░▀░▀▀▀░░▀░░░▀░░▀▀▀░▀░▀
+*/
 
 #pragma once
 
