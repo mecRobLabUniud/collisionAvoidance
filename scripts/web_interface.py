@@ -33,7 +33,11 @@ from utils.decorators import set_rate
 # ─────────────────────────────────────────────────────────────────────────────
 # Parameters 
 # ─────────────────────────────────────────────────────────────────────────────
-app = Flask(__name__)
+
+app = Flask(__name__, 
+            template_folder='flask_utils', 
+            static_folder='flask_utils', 
+            static_url_path='')
 socketio = SocketIO(app, cors_allowed_origins="*")
 dtrs = None
 in_port = 7000
