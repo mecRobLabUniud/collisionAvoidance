@@ -28,7 +28,7 @@ export function resize(){
   const w = app.clientWidth, h = app.clientHeight;
   renderer.setSize(w,h);
   camera.aspect = w/h;
-  // camera.up.set(0, 0, 1);
+  camera.up.set(0, 0, 1);
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);

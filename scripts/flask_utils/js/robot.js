@@ -205,10 +205,10 @@ let camDist = 1.7, camTheta = 0.9, camPhi = 1.15, camTarget = new THREE.Vector3(
 let dragging = false, panning = false, lastX=0, lastY=0;
 
 function updateCamera(){
-  const x = camTarget.x + camDist*Math.sin(camPhi)*Math.sin(camTheta);
-  const y = camTarget.y + camDist*Math.cos(camPhi);
-  const z = camTarget.z + camDist*Math.sin(camPhi)*Math.cos(camTheta);
-  camera.position.set(x,y,z);
+  const x = camDist * Math.sin(camPhi) * Math.cos(camTheta);
+  const y = camDist * Math.sin(camPhi) * Math.sin(camTheta);
+  const z = camDist * Math.cos(camPhi);
+  camera.position.set(camTarget.x + x, camTarget.y + y, camTarget.z + z);
   camera.lookAt(camTarget);
 }
 
