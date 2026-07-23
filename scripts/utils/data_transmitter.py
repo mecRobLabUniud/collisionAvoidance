@@ -218,8 +218,13 @@ class DataTransmitter:
         buf[:] = frame[:]
 
     @requires("sender")
-    def _send_skeleton_data(self, skeleton: np.ndarray, confidence: np.ndarray):
-        msg = (f"{self.topic}_{self.device_id}; " f"{json.dumps(skeleton.tolist())}; " f"{json.dumps(confidence.tolist())}")
+    def _send_skeleton_data(self, *array: np.ndarray):
+        msg = f"{self.topic}_{self.device_id}"
+        for elem in array:
+            msg += f"; {json.dumps(elem.tolist())}"
+        # msg = (f"{self.topic}_{self.device_id}; " f"{json.dumps(skeleton.tolist())}; " f"{json.dumps(confidence.tolist())}")
+        print('======================')
+        print(msg)
         self.socket.send_string(msg)
 
     @requires("sender")
@@ -244,7 +249,7 @@ class DataTransmitter:
     @requires("receiver")
     def _receive_skeleton_data(self):
         packed = self.receive_packed_msg()
-        _, skeleton_packed, confidence_packed = packed.split("; ", 2)
+        _, skeleton_packed, confidence_packed = packed.split("; ")
         skeleton = json.loads(skeleton_packed)
         confidence = json.loads(confidence_packed)
         return skeleton, confidence

@@ -205,7 +205,7 @@ updateCamera();
 // ─────────────────────────────────────────────────────────────────────────────
 function update_plot() {
   socket.on('update_plot', function (point) {
-      q = point.q;
+      q = point.q_robot;
       document.getElementById("hint").innerHTML = q;
       updateKinematics();
       
