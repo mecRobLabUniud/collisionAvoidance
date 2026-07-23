@@ -1,3 +1,7 @@
+import * as THREE from 'three'
+import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js'
+import { scene, camera, renderer, resize } from './scene.js'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameters
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +32,7 @@ const ZERO_POSE  = [0, 0, 0, -Math.PI/2, 0, Math.PI/2, 0];
 let q = READY_POSE.slice();
 let gripperOpening = 0.04;
 let HAND = false;
+const socket = io();
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,7 +50,7 @@ else {
   MESH_FILES = ['link0','link1','link2','link3','link4','link5','link6','link7'];
 }
 
-const loader = new THREE.ColladaLoader();
+const loader = new ColladaLoader();
 const loaded = {};
 
 function loadOne(name){
@@ -186,7 +191,12 @@ function updateKinematics(){
   //   `x <b>${p.x.toFixed(3)}</b> m<br>y <b>${p.z.toFixed(3)}</b> m<br>z (up) <b>${p.y.toFixed(3)}</b> m`;
 }
 
-
+/* ---------- render loop ---------- */
+function animate(){
+  requestAnimationFrame(animate);
+  // if (spin){ camTheta += 0.003; updateCamera(); }
+  renderer.render(scene, camera);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3D graphics controls
@@ -228,13 +238,6 @@ renderer.domElement.addEventListener('wheel', e=>{
   camDist = Math.min(Math.max(camDist * (1 + e.deltaY*0.001), 0.5), 5);
   updateCamera();
 }, { passive:false });
-
-/* ---------- render loop ---------- */
-function animate(){
-  requestAnimationFrame(animate);
-  // if (spin){ camTheta += 0.003; updateCamera(); }
-  renderer.render(scene, camera);
-}
 
 resize();
 updateCamera();

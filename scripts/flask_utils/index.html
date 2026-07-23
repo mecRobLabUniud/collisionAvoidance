@@ -3,8 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>Panda — Franka Emika DAE Viewer</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/utils/ColladaLoader.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+  }
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -16,7 +22,7 @@
     <div id="hud">
       <div class="tag">FRANKA EMIKA · 7-DOF</div>
       <h1>Panda DAE Viewer</h1>
-      <p id="rula_score">PROVA</p>
+      <p id="rula_score"></p>
     </div>
     <div id="hint"></div>
   </div>
@@ -38,9 +44,9 @@
 </div>
 
 
-<script src="js/scene.js"></script>
-<script src="js/robot.js"></script>
-<script src="js/camera.js"></script>
-<script src="js/capsules.js"></script>
+<script type="module" src="js/scene.js"></script>
+<script type="module" src="js/robot.js"></script>
+<!-- <script type="module" src="js/camera.js"></script>
+<script type="module" src="js/capsules.js"></script> -->
 </body>
 </html>
