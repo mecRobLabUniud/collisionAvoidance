@@ -222,9 +222,6 @@ class DataTransmitter:
         msg = f"{self.topic}_{self.device_id}"
         for elem in array:
             msg += f"; {json.dumps(elem.tolist())}"
-        # msg = (f"{self.topic}_{self.device_id}; " f"{json.dumps(skeleton.tolist())}; " f"{json.dumps(confidence.tolist())}")
-        print('======================')
-        print(msg)
         self.socket.send_string(msg)
 
     @requires("sender")

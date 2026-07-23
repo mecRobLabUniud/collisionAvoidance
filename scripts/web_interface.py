@@ -78,6 +78,7 @@ def send_skeleton_data():
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
         if use_robot:
+            print(dtrs[-3].receive_skeleton_data())
             robot_p = dtrs[-3].receive_skeleton_data()[0]
             robot_q = dtrs[-3].receive_skeleton_data()[1]
             caps_radius = dtrs[-3].receive_skeleton_data()[2]
@@ -85,7 +86,7 @@ def send_skeleton_data():
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
             z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot_p]
-            q_robot = [q if not np.isnan(q) else None for q in q]
+            q_robot = [q if not np.isnan(q) else None for q in robot_q]
             radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
 
             msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius}
