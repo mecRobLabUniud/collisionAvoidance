@@ -246,10 +246,8 @@ class DataTransmitter:
     @requires("receiver")
     def _receive_skeleton_data(self):
         packed = self.receive_packed_msg()
-        _, skeleton_packed, confidence_packed = packed.split("; ")
-        skeleton = json.loads(skeleton_packed)
-        confidence = json.loads(confidence_packed)
-        return skeleton, confidence
+        _, *packed_data = packed.split("; ")
+        return [json.loads(packed) for packed in packed_data]
     
     @requires("receiver")
     def _receive_rula_score(self):

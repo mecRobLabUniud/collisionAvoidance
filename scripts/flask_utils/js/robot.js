@@ -28,6 +28,7 @@ const LIMITS = [
 
 const READY_POSE = [0, -Math.PI/4, 0, -3*Math.PI/4, 0, Math.PI/2, Math.PI/4];
 let q = READY_POSE.slice();
+let robot_base = [0.0, 0.0, 0.0];
 let gripperOpening = 0.04;
 let HAND = false;
 const socket = io();
@@ -136,7 +137,8 @@ function dhMatrix(a, alpha, d, theta){
 function updateKinematics(){
   const baseRot = new THREE.Matrix4();
   let T = baseRot.clone();
-  T.setPosition(0, 0, 0);
+  // T.setPosition(0, 0, 0);
+  T.setPosition(robot_base[0], robot_base[1], robot_base[2]);
 
   if (loaded['link0']){
     loaded['link0'].position.setFromMatrixPosition(T);
@@ -206,7 +208,8 @@ updateCamera();
 function update_plot() {
   socket.on('update_plot', function (point) {
       q = point.q_robot;
-      document.getElementById("hint").innerHTML = q;
+      robot_base = [point.x_robot[0], point.y_robot[0], point.z_robot[0]]
+      document.getElementById("hint").innerHTML = robot_base;
       updateKinematics();
       
     }); 

@@ -78,7 +78,6 @@ def send_skeleton_data():
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
         if use_robot:
-            print(dtrs[-3].receive_skeleton_data())
             robot_p = dtrs[-3].receive_skeleton_data()[0]
             robot_q = dtrs[-3].receive_skeleton_data()[1]
             caps_radius = dtrs[-3].receive_skeleton_data()[2]
@@ -91,8 +90,7 @@ def send_skeleton_data():
 
             msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius}
         else:
-            q = [cnt, -3.14/4, 0, -3*3.14/4, 0, 3.14/2, 3.14/4]
-            msg = {"x": x, "y": y, "z": z, "q": q}
+            msg = {"x": x, "y": y, "z": z}
         socketio.emit("update_plot", msg)
         if cnt < -2:
             state = 1
