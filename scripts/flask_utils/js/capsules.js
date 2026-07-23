@@ -248,14 +248,12 @@ function updateCapsule(capsule, p1, p2, radius = 0.05, rula = false) {
 // ─────────────────────────────────────────────────────────────────────────────
 function update_plot() {
     socket.on('update_plot', function (point) {
-        const data = [];
         const r_sw_r = point.radius;
         
         for (let i = 0; i < COCO_SKELETON.length; i++) {
             const a = COCO_SKELETON[i][0];
             const b = COCO_SKELETON[i][1];
             if (point.x[a] != null && point.x[b] != null) {
-                // data.push(capsuleMesh([point.x[a], point.y[a], point.z[a]], [point.x[b], point.y[b], point.z[b]], r_sw_h[i], 0.4));
                 human_caps[i] = updateCapsule(
                         human_caps[i],
                         { x: point.x[a], y: point.y[a], z: point.z[a] },
@@ -275,13 +273,11 @@ function update_plot() {
                 const a = ROBOT_CONFIG[i][0];
                 const b = ROBOT_CONFIG[i][1];
                 if (point.x_robot[a] != null && point.x_robot[b] != null) {
-                    // data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], r_sw_r[i], 0.4, rule = false));
-                    // data.push(capsuleMesh([point.x_robot[a], point.y_robot[a], point.z_robot[a]], [point.x_robot[b], point.y_robot[b], point.z_robot[b]], rv[i], 0.2, rule = false));
-                    updateCapsule(
+                    robot_caps[i] = updateCapsule(
                         robot_caps[i],
                         { x: point.x_robot[a], y: point.y_robot[a], z: point.z_robot[a] },
                         { x: point.x_robot[b], y: point.y_robot[b], z: point.z_robot[b] },
-                        r_sw_h[i],
+                        r_sw_r[i],
                         false
                     );
                     robot_caps[i].visible = true;
