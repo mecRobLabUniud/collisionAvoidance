@@ -205,11 +205,15 @@ updateCamera();
 // ─────────────────────────────────────────────────────────────────────────────
 // Update plot
 // ─────────────────────────────────────────────────────────────────────────────
+let do_once = true;
 function update_plot() {
   socket.on('update_plot', function (point) {
       q = point.q_robot;
-      robot_base = [point.x_robot[0], point.y_robot[0], point.z_robot[0]]
-      document.getElementById("hint").innerHTML = robot_base;
+      if (do_once) {
+        robot_base = [point.x_robot[0], point.y_robot[0], point.z_robot[0]];
+        do_once = false;
+      }
+      document.getElementById("hint").innerHTML = q;
       updateKinematics();
       
     }); 

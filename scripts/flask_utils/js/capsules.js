@@ -180,7 +180,7 @@ for (const _ of COCO_SKELETON) {
 // ─────────────────────────────────────────────────────────────────────────────
 function createCapsule() {
     const geometry = new THREE.CapsuleGeometry(0.01, 0.01, 4, 8);
-    const material = new THREE.MeshBasicMaterial( { color: '#aaaaaa', transparent: true, opacity: 0.8 } );
+    const material = new THREE.MeshBasicMaterial( { color: '#aaaaaa', transparent: true, opacity: 0.5 } );
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.visible = false;
@@ -229,10 +229,9 @@ function updateCapsule(capsule, p1, p2, radius = 0.05, rula = false) {
     }
 
     capsule.geometry.dispose();
-    capsule.geometry = new THREE.CapsuleGeometry(radius, length, 4, 8);
+    capsule.geometry = new THREE.CapsuleGeometry(radius, length, 10, 20);
     capsule.position.copy(mid);
     capsule.material.color.set(caps_color);
-    // capsule.material.opacity = 0.8;
 
     // Default capsule axis is Y; rotate to align with p1->p2
     const dir = end.clone().sub(start).normalize();
