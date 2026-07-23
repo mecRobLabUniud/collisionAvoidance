@@ -180,9 +180,9 @@ for (const _ of COCO_SKELETON) {
 // ─────────────────────────────────────────────────────────────────────────────
 function createCapsule() {
     const geometry = new THREE.CapsuleGeometry(0.01, 0.01, 4, 8);
-    const material = new THREE.MeshBasicMaterial( { color: '#aaaaaa' } );
+    const material = new THREE.MeshBasicMaterial( { color: '#aaaaaa', transparent: true, opacity: 0.8 } );
 
-    const mesh = new THREE.Mesh(geometry, material || new THREE.MeshStandardMaterial());
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.visible = false;
     scene.add(mesh);
 
@@ -190,7 +190,7 @@ function createCapsule() {
 }
 
 
-function updateCapsule(capsule, p1, p2, radius = 0.05) {
+function updateCapsule(capsule, p1, p2, radius = 0.05, rula = false) {
     const start = new THREE.Vector3(p1.x, p1.y, p1.z);
     const end   = new THREE.Vector3(p2.x, p2.y, p2.z);
 
@@ -231,7 +231,8 @@ function updateCapsule(capsule, p1, p2, radius = 0.05) {
     capsule.geometry.dispose();
     capsule.geometry = new THREE.CapsuleGeometry(radius, length, 4, 8);
     capsule.position.copy(mid);
-    capsule.material.color.setHex(caps_color);
+    capsule.material.color.set(caps_color);
+    // capsule.material.opacity = 0.8;
 
     // Default capsule axis is Y; rotate to align with p1->p2
     const dir = end.clone().sub(start).normalize();
@@ -259,7 +260,8 @@ function update_plot() {
                         human_caps[i],
                         { x: point.x[a], y: point.y[a], z: point.z[a] },
                         { x: point.x[b], y: point.y[b], z: point.z[b] },
-                        r_sw_h[i]
+                        r_sw_h[i], 
+                        true
                     );
                 human_caps[i].visible = true;
             }
@@ -268,7 +270,7 @@ function update_plot() {
             }
         }
 
-        /* if (point.x_robot && point.y_robot && point.z_robot && point.x_robot) {
+        if (point.x_robot && point.y_robot && point.z_robot && point.x_robot) {
             for (let i = 0; i < ROBOT_CONFIG.length; i++) {
                 const a = ROBOT_CONFIG[i][0];
                 const b = ROBOT_CONFIG[i][1];
@@ -279,7 +281,8 @@ function update_plot() {
                         robot_caps[i],
                         { x: point.x_robot[a], y: point.y_robot[a], z: point.z_robot[a] },
                         { x: point.x_robot[b], y: point.y_robot[b], z: point.z_robot[b] },
-                        r_sw_h[i]
+                        r_sw_h[i],
+                        false
                     );
                     robot_caps[i].visible = true;
                 }
@@ -287,7 +290,7 @@ function update_plot() {
                     robot_caps[i].visible = false;
                 }
             }
-        }*/
+        }
 
         // if (!plotInitialized) {
         //     Plotly.newPlot('plot', data, layout);

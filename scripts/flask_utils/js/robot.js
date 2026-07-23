@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { ColladaLoader } from 'three/addons/loaders/ColladaLoader.js'
-import { scene, camera, renderer, resize } from './scene.js'
+import { scene, camera, renderer, resize , updateCamera} from './scene.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameters
@@ -27,8 +27,6 @@ const LIMITS = [
 ];
 
 const READY_POSE = [0, -Math.PI/4, 0, -3*Math.PI/4, 0, Math.PI/2, Math.PI/4];
-const ZERO_POSE  = [0, 0, 0, -Math.PI/2, 0, Math.PI/2, 0];
-
 let q = READY_POSE.slice();
 let gripperOpening = 0.04;
 let HAND = false;
@@ -136,9 +134,9 @@ function dhMatrix(a, alpha, d, theta){
 }
 
 function updateKinematics(){
-  const baseRot = new THREE.Matrix4().makeRotationX(-Math.PI/2);
+  const baseRot = new THREE.Matrix4();
   let T = baseRot.clone();
-  T.setPosition(0, 0.04, 0);
+  T.setPosition(0, 0, 0);
 
   if (loaded['link0']){
     loaded['link0'].position.setFromMatrixPosition(T);
@@ -187,8 +185,6 @@ function updateKinematics(){
   // TCP readout — hand frame, 0.1034m along its z (franka_hand default tcp offset)
   const tcpMat = handMat4.clone().multiply(new THREE.Matrix4().makeTranslation(0,0,0.1034));
   const p = new THREE.Vector3().setFromMatrixPosition(tcpMat);
-  // document.getElementById('readout').innerHTML =
-  //   `x <b>${p.x.toFixed(3)}</b> m<br>y <b>${p.z.toFixed(3)}</b> m<br>z (up) <b>${p.y.toFixed(3)}</b> m`;
 }
 
 /* ---------- render loop ---------- */
@@ -198,46 +194,7 @@ function animate(){
   renderer.render(scene, camera);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 3D graphics controls
-// ─────────────────────────────────────────────────────────────────────────────
-let camDist = 1.7, camTheta = 0.9, camPhi = 1.15, camTarget = new THREE.Vector3(0,0.35,0);
-let dragging = false, panning = false, lastX=0, lastY=0;
 
-function updateCamera(){
-  const x = camDist * Math.sin(camPhi) * Math.cos(camTheta);
-  const y = camDist * Math.sin(camPhi) * Math.sin(camTheta);
-  const z = camDist * Math.cos(camPhi);
-  camera.position.set(camTarget.x + x, camTarget.y + y, camTarget.z + z);
-  camera.lookAt(camTarget);
-}
-
-renderer.domElement.addEventListener('mousedown', e=>{
-  if (e.button === 2) panning = true; else dragging = true;
-  lastX = e.clientX; lastY = e.clientY;
-});
-window.addEventListener('mouseup', ()=>{ dragging=false; panning=false; });
-window.addEventListener('mousemove', e=>{
-  const dx = e.clientX-lastX, dy = e.clientY-lastY;
-  lastX = e.clientX; lastY = e.clientY;
-  if (dragging){
-    camTheta -= dx*0.006;
-    camPhi = Math.min(Math.max(camPhi - dy*0.006, 0.15), Math.PI-0.1);
-    updateCamera();
-  } else if (panning){
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix,0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix,1);
-    camTarget.addScaledVector(right, -dx*0.0015*camDist);
-    camTarget.addScaledVector(up, dy*0.0015*camDist);
-    updateCamera();
-  }
-});
-renderer.domElement.addEventListener('contextmenu', e=>e.preventDefault());
-renderer.domElement.addEventListener('wheel', e=>{
-  e.preventDefault();
-  camDist = Math.min(Math.max(camDist * (1 + e.deltaY*0.001), 0.5), 5);
-  updateCamera();
-}, { passive:false });
 
 resize();
 updateCamera();
