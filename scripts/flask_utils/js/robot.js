@@ -30,67 +30,11 @@ let gripperOpening = 0.04;
 let HAND = false;
 
 
-
-
-
-const socket = io();
-
-
-
-
-
-/* warn early if opened directly as a file:// page — ColladaLoader needs XHR,
-   which browsers block on the file:// protocol. */
-if (location.protocol === 'file:') {
-  document.getElementById('loadingTxt').innerHTML =
-    'Open this over a local server, not file://<br>e.g. <code>python3 -m http.server</code> in this folder';
-  document.querySelector('#loading .spin').style.display = 'none';
-}
-
-/* ---------- three.js scaffold ---------- */
-const app = document.getElementById('plot');
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0c0f0d);
-scene.fog = new THREE.Fog(0x0c0f0d, 3, 9);
-
-const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 50);
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-app.appendChild(renderer.domElement);
-
-function resize(){
-  const w = app.clientWidth, h = app.clientHeight;
-  renderer.setSize(w,h);
-  camera.aspect = w/h;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener('resize', resize);
-
-/* lighting — a bit brighter than a PBR scene since Collada materials build as Phong */
-scene.add(new THREE.HemisphereLight(0xaebdb4, 0x0a0a0a, 0.7));
-const key = new THREE.DirectionalLight(0xffffff, 1.1);
-key.position.set(1.6, 2.4, 1.2);
-scene.add(key);
-const fill = new THREE.DirectionalLight(0xbfd4ff, 0.4);
-fill.position.set(-1.4, 1.0, 1.6);
-scene.add(fill);
-const rim = new THREE.DirectionalLight(0xff8a3d, 0.25);
-rim.position.set(-1.5, 1.0, -1.8);
-scene.add(rim);
-
-/* floor grid */
-const grid = new THREE.GridHelper(3, 30, 0x2c3a32, 0x1a221d);
-scene.add(grid);
-const worldAxes = new THREE.AxesHelper(0.25);
-worldAxes.position.set(0,0.002,0);
-scene.add(worldAxes);
-
-const pedestalMat = new THREE.MeshStandardMaterial({ color:0x1c1f1c, metalness:0.4, roughness:0.5 });
+// ─────────────────────────────────────────────────────────────────────────────
+// Robot group
+// ─────────────────────────────────────────────────────────────────────────────
 const robotGroup = new THREE.Group();
 scene.add(robotGroup);
-const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.04,32), pedestalMat);
-pedestal.position.y = 0.02;
-robotGroup.add(pedestal);
 
 /* ---------- load real Franka visual meshes (.dae) ---------- */
 var MESH_FILES = [];
@@ -152,12 +96,13 @@ Promise.all(MESH_FILES.map(n =>
   document.getElementById('loading').style.opacity = '0';
   setTimeout(()=> document.getElementById('loading').style.display = 'none', 300);
 
-  
+  animate();
 }).catch(err=>{
   loadingTxt.innerHTML = 'Failed to load meshes.<br>Check the browser console and that meshes/visual/*.dae exist.';
   document.querySelector('#loading .spin').style.display = 'none';
   console.error(err);
 });
+
 
 const frameHelpers = [];
 for (let i=0;i<DH.length;i++){
@@ -220,9 +165,6 @@ function updateKinematics(){
   flangeHelper.position.setFromMatrixPosition(handMat4);
   flangeHelper.quaternion.setFromRotationMatrix(handMat4);
 
-  // fingers: prismatic joints at hand-frame z=0.0584, sliding along hand-local Y.
-  // the right finger's visual mesh is authored pre-rotated 180deg about Z (see franka_hand.xacro)
-  // so the same finger.dae can be reused mirrored for both sides.
   const fingerBase = new THREE.Matrix4().makeTranslation(0, 0, 0.0584);
   const leftMat = handMat4.clone().multiply(fingerBase).multiply(new THREE.Matrix4().makeTranslation(0, gripperOpening, 0));
   const rightMat = handMat4.clone().multiply(fingerBase)
@@ -246,9 +188,9 @@ function updateKinematics(){
 
 
 
-
-
-/* ---------- camera orbit (manual, no external deps) ---------- */
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D graphics controls
+// ─────────────────────────────────────────────────────────────────────────────
 let camDist = 1.7, camTheta = 0.9, camPhi = 1.15, camTarget = new THREE.Vector3(0,0.35,0);
 let dragging = false, panning = false, lastX=0, lastY=0;
 
@@ -298,17 +240,9 @@ resize();
 updateCamera();
 
 
-
-
-
-
-
-
-
-
-
-
-
+// ─────────────────────────────────────────────────────────────────────────────
+// Update plot
+// ─────────────────────────────────────────────────────────────────────────────
 function update_plot() {
   socket.on('update_plot', function (point) {
       q = point.q;
@@ -318,49 +252,6 @@ function update_plot() {
     }); 
 }
 
-animate();
-
-
-
-
-
-
 setTimeout(update_plot, 1 / 30 * 1000);
-setTimeout(update_stream1, 1 / 30 * 1000);
-setTimeout(update_stream2, 1 / 30 * 1000);
-setTimeout(update_stream3, 1 / 30 * 1000);
-setTimeout(update_stream4, 1 / 30 * 1000);
-
-
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Streaming updates
-// ─────────────────────────────────────────────────────────────────────────────
-function update_stream1() {
-    socket.on('update_stream1', function (data) {
-        document.getElementById('image1').src = data.frame;
-    });
-}
-
-function update_stream2() {
-    socket.on('update_stream2', function (data) {
-        document.getElementById('image2').src = data.frame;
-    });
-}
-
-function update_stream3() {
-    socket.on('update_stream3', function (data) {
-        document.getElementById('image3').src = data.frame;
-    });
-}
-
-function update_stream4() {
-    socket.on('update_stream4', function (data) {
-        document.getElementById('image4').src = data.frame;
-    });
-}
-
-
 
 

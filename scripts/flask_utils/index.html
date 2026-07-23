@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Panda — Franka Emika DAE Viewer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/ColladaLoader.js"></script>
+<script src="js/utils/ColladaLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -16,14 +16,14 @@
     <div id="hud">
       <div class="tag">FRANKA EMIKA · 7-DOF</div>
       <h1>Panda DAE Viewer</h1>
-      <div class="sub">Real visual meshes (franka_description) · modified-DH kinematics</div>
+      <p id="rula_score">PROVA</p>
     </div>
     <div id="hint"></div>
   </div>
 
   <div style="width:30%; height:100%">
     <div>
-      <img id="image1" src="prova.jpg" style="max-width:100%;">
+      <img id="image1" src="" style="max-width:100%;">
     </div>
     <div>
       <img id="image2" src="" style="max-width:100%;">
@@ -38,6 +38,9 @@
 </div>
 
 
-<script src="js/app.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/robot.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/capsules.js"></script>
 </body>
 </html>
