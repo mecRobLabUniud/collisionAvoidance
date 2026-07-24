@@ -16,8 +16,8 @@ if (location.protocol === 'file:') {
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 const app = document.getElementById('plot');
 export const scene = new THREE.Scene();
-scene.background = new THREE.Color('#161616');
-scene.fog = new THREE.Fog('#161616', 3, 9);
+scene.background = new THREE.Color('#3a3a3a');
+scene.fog = new THREE.Fog('#3a3a3a', 3, 9);
 
 export const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 50);
 export const renderer = new THREE.WebGLRenderer({ antialias:true });
