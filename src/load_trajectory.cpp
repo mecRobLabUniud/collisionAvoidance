@@ -1,15 +1,14 @@
-#include <Eigen/Dense>
+#include "load_trajectory.hpp"
+
 #include <fstream>
-#include <vector>
-#include <array>
 #include <stdexcept>
 #include <iostream>
 #include <cmath>
 #include <sstream>
-#include <string>
 #include <iomanip>
+#include <algorithm>
 
-
+// ── CSV I/O ────────────────────────────────────────────────────────────────
 std::vector<std::array<double, 7>> loadTrajectoryCSV(const std::string& path) {
     std::ifstream f(path);
     if (!f) throw std::runtime_error("Cannot open: " + path);
@@ -44,7 +43,6 @@ std::vector<std::array<double, 7>> loadTrajectoryCSV(const std::string& path) {
     std::cout << "Loaded " << traj.size() << " waypoints from " << path << "\n";
     return traj;
 }
-
 
 void saveTrajectoryCSV(const std::string& path,
                        const std::vector<std::array<double, 7>>& traj) {
@@ -99,7 +97,6 @@ std::vector<double> loadTimestampsCSV(const std::string& path) {
     return t;
 }
 
-
 void saveTimestampsCSV(const std::string& path,
                        const std::vector<double>& times) {
     std::ofstream f(path);
@@ -113,8 +110,7 @@ void saveTimestampsCSV(const std::string& path,
     std::cout << "Saved " << times.size() << " timestamps to " << path << "\n";
 }
 
-
-// ── Load / Save binary ────────────────────────────────────────────────────────
+// ── Binary I/O ────────────────────────────────────────────────────────────
 std::vector<std::array<double, 7>> loadBin(const std::string& path) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) throw std::runtime_error("Cannot open: " + path);
@@ -136,7 +132,7 @@ void saveBin(const std::string& path,
         f.write(reinterpret_cast<const char*>(wp.data()), 7 * sizeof(double));
 }
 
-// ── Finite-difference velocity estimation ─────────────────────────────────────
+// ── Finite-difference velocity estimation ──────────────────────────────────
 // Central differences for interior points, one-sided for endpoints
 Eigen::VectorXd estimateVelocities(const Eigen::VectorXd& t,
                                     const Eigen::VectorXd& q) {
@@ -154,7 +150,7 @@ Eigen::VectorXd estimateVelocities(const Eigen::VectorXd& t,
     return v;
 }
 
-// ── Finite-difference acceleration estimation ─────────────────────────────────
+// ── Finite-difference acceleration estimation ───────────────────────────────
 Eigen::VectorXd estimateAccelerations(const Eigen::VectorXd& t,
                                        const Eigen::VectorXd& q) {
     int n = q.size();
@@ -175,41 +171,7 @@ Eigen::VectorXd estimateAccelerations(const Eigen::VectorXd& t,
     return a;
 }
 
-// ── Quintic Hermite basis functions ───────────────────────────────────────────
-// Given normalized parameter s ∈ [0,1] and segment length h,
-// returns the quintic interpolated value.
-//
-// Hermite basis for quintic (C2 continuous):
-//   p(s) = h00*p0 + h10*h*v0 + h20*h²*a0
-//         + h01*p1 + h11*h*v1 + h21*h²*a1
-//
-// where the basis polynomials are:
-//   h00 =  1 - 10s³ + 15s⁴ - 6s⁵
-//   h10 =  s  - 6s³ +  8s⁴ - 3s⁵
-//   h20 =  s²/2 - 3s³/2 + 3s⁴/2 - s⁵/2
-//   h01 =  10s³ - 15s⁴ + 6s⁵
-//   h11 = -4s³  +  7s⁴ - 3s⁵
-//   h21 =  s³/2 -   s⁴ + s⁵/2
-inline double quinticHermite(double s, double h,
-                              double p0, double v0, double a0,
-                              double p1, double v1, double a1) {
-    double s2 = s * s;
-    double s3 = s2 * s;
-    double s4 = s3 * s;
-    double s5 = s4 * s;
-
-    double h00 =  1.0 - 10*s3 + 15*s4 -  6*s5;
-    double h10 =  s   -  6*s3 +  8*s4 -  3*s5;
-    double h20 =  0.5*s2 - 1.5*s3 + 1.5*s4 - 0.5*s5;
-    double h01 =  10*s3  - 15*s4  +  6*s5;
-    double h11 = -4*s3   +  7*s4  -  3*s5;
-    double h21 =  0.5*s3 -    s4  +  0.5*s5;
-
-    return h00*p0 + h10*h*v0 + h20*h*h*a0
-         + h01*p1 + h11*h*v1 + h21*h*h*a1;
-}
-
-// ── Per-joint quintic spline interpolation ────────────────────────────────────
+// ── Per-joint quintic spline interpolation ──────────────────────────────────
 Eigen::VectorXd quinticSplineInterp(const Eigen::VectorXd& t_low,
                                      const Eigen::VectorXd& q_low,
                                      const Eigen::VectorXd& t_high) {
@@ -240,7 +202,7 @@ Eigen::VectorXd quinticSplineInterp(const Eigen::VectorXd& t_low,
     return q_high;
 }
 
-// ── Main interpolation entry point ────────────────────────────────────────────
+// ── Main interpolation entry point ──────────────────────────────────────────
 std::vector<std::array<double, 7>> interpolateTo1kHz(
         const std::vector<std::array<double, 7>>& traj_low,
         std::vector<double> time_low) {
@@ -274,9 +236,11 @@ std::vector<std::array<double, 7>> interpolateTo1kHz(
     return traj_high;
 }
 
-// ── Sanity checks ─────────────────────────────────────────────────────────────
+// ── Sanity checks ────────────────────────────────────────────────────────
+// Note: default value for rate_hz is declared in the header only —
+// repeating it here would be a compile error.
 void validateTrajectory(const std::vector<std::array<double, 7>>& traj,
-                         double rate_hz = 1000.0) {
+                         double rate_hz) {
     // Franka Panda limits
     constexpr double VEL_LIMIT  = 2.175;    // rad/s
     constexpr double ACC_LIMIT  = 15.0;     // rad/s²
@@ -309,41 +273,4 @@ void validateTrajectory(const std::vector<std::array<double, 7>>& traj,
     std::cout << "Max acc    : " << max_acc  << " rad/s²  "
               << (max_acc  > ACC_LIMIT  ? "⚠ EXCEEDS LIMIT" : "✓ OK") << "\n";
     std::cout << "───────────────────────────────────────────────\n";
-}
-
-// ── Entry point ───────────────────────────────────────────────────────────────
-int main(int argc, char** argv) {
-    /* if (argc < 4) {
-        std::cerr << "Usage: " << argv[0]
-                  << " <input.bin> <output.bin> <source_rate_hz>\n";
-        return 1;
-    }
-
-    std::string input_path  = argv[1];
-    std::string output_path = argv[2];
-    double      source_rate = std::stod(argv[3]);
-
-    auto traj_low  = loadBin(input_path);
-    std::cout << "Loaded " << traj_low.size()
-              << " waypoints @ " << source_rate << " Hz\n"; */
-
-    std::string trajectory_path = "../trajectories/traj1/";
-    int columns = 7;
-
-    std::vector<std::array<double, 7>> traj_low = loadTrajectoryCSV(trajectory_path + "q.csv");
-    std::vector<double> t_low = loadTimestampsCSV(trajectory_path + "t.csv");
-    std::cout << "Loaded " << traj_low.size()
-            << " waypoints @ " << 100.0 << " Hz\n";
-
-    auto traj_high = interpolateTo1kHz(traj_low, t_low);
-    std::cout << "Interpolated to " << traj_high.size()
-              << " waypoints @ " << 1000.0 << " Hz\n";
-
-    saveTrajectoryCSV(trajectory_path + "q_1kHz.csv",  traj_high);
-// 
-    // validateTrajectory(traj_high);
-    // saveBin(output_path, traj_high);
-    // std::cout << "Saved " << output_path << "\n";
-// 
-    return 0;
 }

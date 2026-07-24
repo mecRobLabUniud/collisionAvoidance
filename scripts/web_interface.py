@@ -71,6 +71,8 @@ def rula_thread():
 def send_skeleton_data():
     global cnt, state
     try:
+        robot_p = [[0, 0, 0]]
+
         merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
         
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
@@ -80,7 +82,7 @@ def send_skeleton_data():
         if use_robot:
             robot_p = dtrs[-3].receive_skeleton_data()[0]
             robot_q = dtrs[-3].receive_skeleton_data()[1]
-            caps_radius = dtrs[-3].receive_skeleton_data()[2]
+            caps_radius = [] # dtrs[-3].receive_skeleton_data()[2]
 
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
@@ -155,7 +157,9 @@ def main():
                 use_robot = True
         except:
             raise ValueError(f"Wrong argument: {arg2}")
-        
+
+    use_robot = True
+
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
     dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))

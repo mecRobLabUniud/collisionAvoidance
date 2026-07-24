@@ -37,13 +37,6 @@ target_link_libraries(robot_control PRIVATE
     Threads::Threads
 )
 
-add_executable(trajectory_interpolation 
-    src/trajectory_interpolation.cpp
-)
-target_link_libraries(trajectory_interpolation PRIVATE 
-    Eigen3::Eigen
-)
-
 add_executable(joint_point_to_point_motion 
     src/joint_point_to_point_motion.cpp 
     src/examples_common.cpp
@@ -86,3 +79,16 @@ target_link_libraries(rula_evaluation PRIVATE
     rt
 )
 
+add_executable(exec_trajectory 
+    src/exec_trajectory.cpp
+    src/load_trajectory.cpp
+)
+target_link_libraries(exec_trajectory PRIVATE 
+    Eigen3::Eigen
+    ${ZMQ_LIBRARIES}
+    Threads::Threads
+    ${OpenCV_LIBS}
+    nlohmann_json::nlohmann_json
+    pthread
+    rt
+)
