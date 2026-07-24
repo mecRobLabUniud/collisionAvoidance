@@ -20,7 +20,7 @@ import threading
 import logging
 from utils.filters import Keypoints3DSmoother
 from utils.decorators import chronometer, set_rate
-from mediapipe_utils.pose_inference_mediapipe import inference_pose_landmarker, draw_landmarks_on_image
+from mediapipe_utils.pose_inference_mediapipe import MediapipeTracker
 
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
 logging.getLogger('tensorrt').setLevel(logging.ERROR)
@@ -61,6 +61,7 @@ class SkeletonTracker:
         self.mutex = threading.Lock()
         self.align = rs.align(rs.stream.color) # Allinea depth a color
         self.pipe = self.setup_camera_streaming(self.device, w_camera, h_camera, camera_rate, depth)
+        self.mp = MediapipeTracker()
         self.camera_thread = threading.Thread(target=self.camera_streaming, args=())  
         
 
@@ -145,8 +146,8 @@ class SkeletonTracker:
 
             color_img = np.asanyarray(color.get_data())
             rgb_img = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB)
-            results = inference_pose_landmarker(rgb_img)
-            annotated = draw_landmarks_on_image(rgb_img, results)
+            results = self.mp.inference_pose_landmarker(rgb_img)
+            annotated = self.mp.draw_landmarks_on_image(rgb_img, results)
             
             if not results.pose_landmarks == []:
                 person = results.pose_landmarks[0]

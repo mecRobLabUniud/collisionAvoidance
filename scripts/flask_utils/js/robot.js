@@ -213,7 +213,6 @@ function update_plot() {
         robot_base = [point.x_robot[0], point.y_robot[0], point.z_robot[0]];
         do_once = false;
       }
-      document.getElementById("hint").innerHTML = q;
       updateKinematics();
       
     }); 
