@@ -22,6 +22,7 @@
 #include <iostream>
 #include <cstring>
 #include <memory>
+#include <regex>
 
 using json = nlohmann::json;
 
@@ -246,36 +247,6 @@ public:
     }
 
     // skeleton, confidence
-    /* std::pair<std::vector<std::array<double, 3>>, std::vector<double>> receive_skeleton_data() {
-        require(Mode::Receiver);
-        std::string packed = receive_packed_msg();
-
-        size_t first  = packed.find("; ");
-        size_t second = packed.find("; ", first + 2);
-        std::string skeleton_packed   = sanitize_nan(packed.substr(first + 2, second - (first + 2)));
-        std::string confidence_packed = sanitize_nan(packed.substr(second + 2));
-
-        json skel_json = json::parse(skeleton_packed);
-        json conf_json = json::parse(confidence_packed);
-
-        std::vector<std::array<double, 3>> skeleton;
-        for (const auto& pt : skel_json) {
-            skeleton.push_back({
-                json_to_double(pt[0]),
-                json_to_double(pt[1]),
-                json_to_double(pt[2])
-            });
-        }
-
-        std::vector<double> confidence;
-        for (const auto& v : conf_json) {
-            confidence.push_back(json_to_double(v));
-        }
-
-        return {skeleton, confidence};
-    } */
-
-
     std::vector<nlohmann::json> receive_skeleton_data() {
         std::string packed = receive_packed_msg();
 
@@ -283,14 +254,18 @@ public:
         size_t start = 0, pos;
         while ((pos = packed.find("; ", start)) != std::string::npos) {
             parts.push_back(packed.substr(start, pos - start));
-            start = pos + 2; // skip "; "
+            start = pos + 2;
         }
-        parts.push_back(packed.substr(start)); // last chunk
+        parts.push_back(packed.substr(start));
+
+        // Replace bare NaN tokens with valid JSON null (word-boundary safe)
+        static const std::regex nan_re(R"(\bNaN\b)");
 
         std::vector<nlohmann::json> result;
         result.reserve(parts.size() - 1);
-        for (size_t i = 1; i < parts.size(); ++i) { // skip parts[0] == topic_device_id
-            result.push_back(nlohmann::json::parse(parts[i]));
+        for (size_t i = 1; i < parts.size(); ++i) {
+            std::string sanitized = std::regex_replace(parts[i], nan_re, "null");
+            result.push_back(nlohmann::json::parse(sanitized));
         }
         return result;
     }

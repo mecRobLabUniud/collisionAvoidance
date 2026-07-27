@@ -54,6 +54,7 @@ state = 1
 def send_rula_score():
     try:
         score = dtrs[-2].receive_rula_score()
+        print(score)
         socketio.emit("update_rula", score)
         
     except Exception as e:
@@ -81,9 +82,6 @@ def send_skeleton_data():
             robot_p = dtrs[-3].receive_skeleton_data()[0]
             robot_q = dtrs[-3].receive_skeleton_data()[1]
             caps_radius = dtrs[-3].receive_skeleton_data()[2]
-
-            print('============================')
-            print(robot_p, robot_q, caps_radius)
 
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
@@ -158,8 +156,6 @@ def main():
                 use_robot = True
         except:
             raise ValueError(f"Wrong argument: {arg2}")
-
-    use_robot = True
 
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
     if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))

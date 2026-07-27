@@ -93,6 +93,22 @@ std::vector<std::array<double, 3>> parseMergedString(const std::string& input, s
 }
 
 
+double jsonToDouble(const nlohmann::json& v) {
+    if (v.is_null()) return std::numeric_limits<double>::quiet_NaN();
+    return v.get<double>();
+}
+
+
+std::vector<std::array<double,3>> jsonToKeypoints(const nlohmann::json& arr) {
+    std::vector<std::array<double,3>> out;
+    out.reserve(arr.size());
+    for (const auto& p : arr) {
+        out.push_back({ jsonToDouble(p[0]), jsonToDouble(p[1]), jsonToDouble(p[2]) });
+    }
+    return out;
+}
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,8 +126,8 @@ int main() {
     while (true) {
         if (true) {
             auto start = std::chrono::steady_clock::now();
-
-            auto skeleton = dtr.receive_skeleton_data()[0].get<std::vector<std::array<double,3>>>();
+            auto skeleton = jsonToKeypoints(dtr.receive_skeleton_data()[0]);
+            
 
             RULAResult result_R = computeRULA(skeleton, flags, 'R', false);
             RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
