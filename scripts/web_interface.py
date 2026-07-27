@@ -82,9 +82,6 @@ def send_skeleton_data():
             robot_q = dtrs[-3].receive_skeleton_data()[1]
             caps_radius = dtrs[-3].receive_skeleton_data()[2]
 
-            print('---------------------')
-            print(robot_p, robot_q, caps_radius)
-
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
             z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot_p]
@@ -94,17 +91,8 @@ def send_skeleton_data():
             msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius}
         else:
             msg = {"x": x, "y": y, "z": z}
+
         socketio.emit("update_plot", msg)
-        if cnt < -2:
-            state = 1
-        if cnt > 2:
-            state = 0
-
-        if state:
-            cnt+=0.1
-        else:
-            cnt-=0.1
-
         
     except Exception as e:
         print(f"Skeleton thread error: {e}")

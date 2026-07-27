@@ -88,7 +88,6 @@ int main() {
             dts.send_skeleton_data(payload);
         }
         
-
         next_time += std::chrono::duration_cast<std::chrono::steady_clock::duration>(period);
         std::this_thread::sleep_until(next_time);
     }
