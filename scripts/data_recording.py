@@ -65,7 +65,7 @@ def listen_for_input():
 @set_rate(60)
 def record_data(dtrs, skeleton_data_writers, color_writers):
     for dtr, skeleton_data_writer, color_writer in zip(dtrs, skeleton_data_writers, color_writers):
-        skeleton_data_packed = dtr.receive_packed_skeleton_data()
+        skeleton_data_packed = dtr.receive_packed_msg()
 
         with open(skeleton_data_writer, "a") as file:
             file.write(f"{time.time()-t0}; {skeleton_data_packed}\n")
