@@ -28,6 +28,7 @@ Modes (choose exactly one):
 Options:
   --gui             Launch the web interface
   --test N          Test number to stream (only used with --stream)
+  --robot           Include robot simulation
   -h, --help        Show this help message
 EOF
 }

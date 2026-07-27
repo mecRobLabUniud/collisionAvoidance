@@ -128,7 +128,6 @@ int main() {
             auto start = std::chrono::steady_clock::now();
             auto skeleton = jsonToKeypoints(dtr.receive_skeleton_data()[0]);
             
-
             RULAResult result_R = computeRULA(skeleton, flags, 'R', false);
             RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
 
