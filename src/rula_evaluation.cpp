@@ -111,20 +111,12 @@ int main() {
         if (true) {
             auto start = std::chrono::steady_clock::now();
 
-            auto skeleton = dtr.receive_skeleton_data().first;
+            auto skeleton = dtr.receive_skeleton_data()[0].get<std::vector<std::array<double,3>>>();
+
             RULAResult result_R = computeRULA(skeleton, flags, 'R', false);
-            // RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
+            RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
 
-            // result_R.print();
-
-            auto end = std::chrono::steady_clock::now();
-            // Cast to whatever unit you need
-            double elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
-            // std::cout << "Score R: " << result_R.grandScore << "  -  ";
-            // std::cout << "Score L: " << result_L.grandScore << "  -  ";
-            // std::cout << "Elapsed time: " << elapsed_ms << "ms" << "\r";
-
-            std::array<int, 2> rula_score = {result_R.grandScore}; // , result_L.grandScore};
+            std::array<int, 2> rula_score = {result_R.grandScore, result_L.grandScore};
             dts.send_rula_score(rula_score);
             // auto score = dtr_rula.receive_rula_score();
 

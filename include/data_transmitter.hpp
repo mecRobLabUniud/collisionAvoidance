@@ -201,22 +201,12 @@ public:
         std::memcpy(shm_->buf(), frame.data, n);
     }
 
-    void send_skeleton_data(const std::vector<std::array<double, 3>>& skeleton,
-                             const std::vector<double>& confidence) {
-        require(Mode::Sender);
-
-        json skel_json = json::array();
-        for (const auto& pt : skeleton) {
-            skel_json.push_back({pt[0], pt[1], pt[2]});
+    void send_skeleton_data(const std::vector<nlohmann::json>& arrays) {
+        std::string msg = topic_ + "_" + std::to_string(device_id_);
+        for (const auto& elem : arrays) {
+            msg += "; " + elem.dump();
         }
-        json conf_json = confidence;
-
-        std::string msg = topic_ + "_" + std::to_string(device_id_) + "; " +
-                           skel_json.dump() + "; " + conf_json.dump();
-
-        zmq::message_t zmsg(msg.size());
-        std::memcpy(zmsg.data(), msg.data(), msg.size());
-        socket_->send(zmsg, zmq::send_flags::none);
+        socket_->send(zmq::buffer(msg), zmq::send_flags::none);
     }
 
     void send_rula_score(const std::array<int, 2>& score) {
@@ -228,9 +218,9 @@ public:
         std::string msg = topic_ + "_" + std::to_string(device_id_) + "; " +
                            score_json.dump();
 
-        zmq::message_t zmsg(msg.size());
-        std::memcpy(zmsg.data(), msg.data(), msg.size());
-        socket_->send(zmsg, zmq::send_flags::none);
+        // zmq::message_t zmsg(msg.size());
+        // std::memcpy(zmsg.data(), msg.data(), msg.size());
+        socket_->send(zmq::buffer(msg), zmq::send_flags::none);
     }
 
     // ── Receive block (receiver mode only) ──────────────────────────────────
@@ -250,13 +240,13 @@ public:
     }
 
     // Returns a base64 data-URI JPEG, equivalent to Python's receive_frames()
-    std::string receive_frame_b64() {
+    std::string receive_frame() {
         require(Mode::Receiver);
         return cv2_to_b64(receive_raw_frame());
     }
 
     // skeleton, confidence
-    std::pair<std::vector<std::array<double, 3>>, std::vector<double>> receive_skeleton_data() {
+    /* std::pair<std::vector<std::array<double, 3>>, std::vector<double>> receive_skeleton_data() {
         require(Mode::Receiver);
         std::string packed = receive_packed_msg();
 
@@ -283,6 +273,26 @@ public:
         }
 
         return {skeleton, confidence};
+    } */
+
+
+    std::vector<nlohmann::json> receive_skeleton_data() {
+        std::string packed = receive_packed_msg();
+
+        std::vector<std::string> parts;
+        size_t start = 0, pos;
+        while ((pos = packed.find("; ", start)) != std::string::npos) {
+            parts.push_back(packed.substr(start, pos - start));
+            start = pos + 2; // skip "; "
+        }
+        parts.push_back(packed.substr(start)); // last chunk
+
+        std::vector<nlohmann::json> result;
+        result.reserve(parts.size() - 1);
+        for (size_t i = 1; i < parts.size(); ++i) { // skip parts[0] == topic_device_id
+            result.push_back(nlohmann::json::parse(parts[i]));
+        }
+        return result;
     }
 
     std::array<int, 2> receive_rula_score() {

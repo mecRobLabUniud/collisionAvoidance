@@ -82,6 +82,9 @@ def send_skeleton_data():
             robot_q = dtrs[-3].receive_skeleton_data()[1]
             caps_radius = dtrs[-3].receive_skeleton_data()[2]
 
+            print('============================')
+            print(robot_p, robot_q, caps_radius)
+
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
             z_robot = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in robot_p]

@@ -22,6 +22,7 @@ int main() {
     std::signal(SIGINT, signalHandler);  // Ctrl+C
 
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);
+    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 12, "ROBOT", 7000);
 
     /* if (argc < 4) {
         std::cerr << "Usage: " << argv[0]
@@ -69,7 +70,8 @@ int main() {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
 
-        const std::vector<std::array<double, 3>> _;
+        const std::vector<std::array<double, 3>> p = {{0, 0, 0}};
+        const std::vector<int> _ = {};
 
         if (elapsed_ms <= traj_high.size()) {
             printf("t: %i ms - q: %.6f %.6f %.6f %.6f %.6f %.6f %.6f \n", elapsed_ms, 
@@ -77,7 +79,13 @@ int main() {
                 traj_high[elapsed_ms][4], traj_high[elapsed_ms][5], traj_high[elapsed_ms][6]);
 
             std::vector<double> q(traj_high[elapsed_ms].begin(), traj_high[elapsed_ms].end());
-            dts.send_skeleton_data(_, q);
+
+            std::vector<nlohmann::json> payload;
+            payload.push_back(p);
+            payload.push_back(q);
+            payload.push_back(_);
+
+            dts.send_skeleton_data(payload);
         }
         
 
