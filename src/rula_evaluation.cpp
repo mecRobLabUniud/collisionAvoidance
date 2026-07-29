@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "rula_score_computation.h"
+#include "rula_score_computation.hpp"
 #include "data_transmitter.hpp"
 
 

@@ -7,7 +7,7 @@
 #include <franka/exception.h>
 #include <franka/robot.h>
 
-#include "examples_common.h"
+#include "examples_common.hpp"
 
 /**
  * @example simple_control.cpp

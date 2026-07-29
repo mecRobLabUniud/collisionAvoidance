@@ -160,6 +160,7 @@ private:
     }
 };
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Data transmitter
 // ─────────────────────────────────────────────────────────────────────────────
@@ -219,8 +220,6 @@ public:
         std::string msg = topic_ + "_" + std::to_string(device_id_) + "; " +
                            score_json.dump();
 
-        // zmq::message_t zmsg(msg.size());
-        // std::memcpy(zmsg.data(), msg.data(), msg.size());
         socket_->send(zmq::buffer(msg), zmq::send_flags::none);
     }
 
@@ -240,13 +239,11 @@ public:
         return std::string(static_cast<char*>(zmsg.data()), zmsg.size());
     }
 
-    // Returns a base64 data-URI JPEG, equivalent to Python's receive_frames()
     std::string receive_frame() {
         require(Mode::Receiver);
         return cv2_to_b64(receive_raw_frame());
     }
 
-    // skeleton, confidence
     std::vector<nlohmann::json> receive_skeleton_data() {
         std::string packed = receive_packed_msg();
 

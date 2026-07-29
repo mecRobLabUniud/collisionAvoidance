@@ -9,7 +9,7 @@
 #include <cmath>
 #include <chrono>
 
-#include "rula_score_computation.h"
+#include "rula_score_computation.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameters

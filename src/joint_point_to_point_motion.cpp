@@ -6,7 +6,7 @@
 #include <franka/exception.h>
 #include <franka/robot.h>
 
-#include "examples_common.h"
+#include "examples_common.hpp"
 
 /**
  * @example joint_point_to_point_motion.cpp

@@ -13,7 +13,7 @@
 #include <franka/robot_state.h>
 #include <franka/exception.h>
 
-#include "examples_common.h"
+#include "examples_common.hpp"
 
 // ---------------------------------------------------------------------------
 // 1. Load trajectory from file

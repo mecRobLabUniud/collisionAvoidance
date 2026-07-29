@@ -1,5 +1,3 @@
-#include "load_trajectory.hpp"
-
 #include <fstream>
 #include <stdexcept>
 #include <iostream>
@@ -7,6 +5,8 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+
+#include "load_trajectory.hpp"
 
 // ── CSV I/O ────────────────────────────────────────────────────────────────
 std::vector<std::array<double, 7>> loadTrajectoryCSV(const std::string& path) {
