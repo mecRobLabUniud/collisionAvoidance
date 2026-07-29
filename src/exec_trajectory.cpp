@@ -8,13 +8,13 @@
 #include <vector>
 #include <charconv>
 
-#include "trajectory_IO.hpp"
+#include "trajectory_utils.hpp"
 #include "data_transmitter.hpp"
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
 
-void signalHandler(int signum) {
+void signal_handler(int signum) {
     (void)signum;
     running = false;
 }
@@ -23,12 +23,12 @@ void signalHandler(int signum) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Execute trajectory
 // ─────────────────────────────────────────────────────────────────────────────
-int exec_trajectory (int n_traj) {
+int exec_trajectory (int n_traj, std::string c_dir="") {
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);
 
-    std::signal(SIGINT, signalHandler);
+    std::signal(SIGINT, signal_handler);
 
-    std::string trajectory_path = "../src/trajectories/test" + std::to_string(n_traj) + "/";
+    std::string trajectory_path = c_dir + "src/trajectories/test" + std::to_string(n_traj) + "/";
     std::ifstream f(trajectory_path);
     try {
         if (!f) throw 1;
@@ -42,17 +42,11 @@ int exec_trajectory (int n_traj) {
     std::vector<double> t_low = load_timestamps_CSV(trajectory_path + "t.csv");
     std::cout << "Loaded " << traj_low.size() << "\n";
 
-    auto traj_high = interpolateTo1kHz(traj_low, t_low);
+    auto traj_high = interpolate_to_1kHz(traj_low, t_low);
     std::cout << "Interpolated to " << traj_high.size()
               << " waypoints @ " << 1000.0 << " Hz\n";
 
     save_trajectory_CSV(trajectory_path + "q_1kHz.csv",  traj_high);
-
-    // validateTrajectory(traj_high);
-    // saveBin(output_path, traj_high);
-    // std::cout << "Saved " << output_path << "\n";
-
-
 
     const double rate_hz = 30.0; // <-- control your loop rate here
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
@@ -98,6 +92,7 @@ int exec_trajectory (int n_traj) {
 // ─────────────────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
     int n_traj = 0;
+    std::string path;
     if (argc > 1) {
         try {
             std::string arg(argv[1]);
@@ -120,8 +115,16 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: argument required." << std::endl;
         return 1;
     }
+    if (argc > 2) {
+        std::string c_dir(argv[2]);
+        path = c_dir + "/";
+    } 
+    else {
+        std::string c_dir(get_current_dir_name());
+        path = c_dir + "/";
+    }
 
-    if (exec_trajectory(n_traj)) {
+    if (exec_trajectory(n_traj, path)) {
         return 1;
     }
     else {

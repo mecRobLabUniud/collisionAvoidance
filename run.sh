@@ -118,7 +118,12 @@ case "$mode" in
         if [ "$use_gui" = true ]; then
             sleep 1
             if [ "$use_robot" = true ]; then
+                $exec_trajectory "$n_traj" & 
                 $web_interface "$n_devices" "--robot"
+                
+                if [ -nz "$n_traj" ]; then
+                    $exec_trajectory "$n_traj" "$dir"
+                fi
             else
                 $web_interface "$n_devices"
             fi

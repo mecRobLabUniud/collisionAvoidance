@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <algorithm>
 
-#include "trajectory_IO.hpp"
+#include "trajectory_utils.hpp"
 
 // ── CSV I/O ────────────────────────────────────────────────────────────────
 std::vector<std::array<double, 7>> load_trajectory_CSV(const std::string& path) {
@@ -110,7 +110,7 @@ void save_timestamps_CSV(const std::string& path,
 }
 
 // ── Binary I/O ────────────────────────────────────────────────────────────
-std::vector<std::array<double, 7>> loadBin(const std::string& path) {
+std::vector<std::array<double, 7>> load_bin(const std::string& path) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) throw std::runtime_error("Cannot open: " + path);
 
@@ -123,7 +123,7 @@ std::vector<std::array<double, 7>> loadBin(const std::string& path) {
     return traj;
 }
 
-void saveBin(const std::string& path,
+void save_bin(const std::string& path,
              const std::vector<std::array<double, 7>>& traj) {
     std::ofstream f(path, std::ios::binary);
     if (!f) throw std::runtime_error("Cannot write: " + path);
@@ -133,7 +133,7 @@ void saveBin(const std::string& path,
 
 // ── Finite-difference velocity estimation ──────────────────────────────────
 // Central differences for interior points, one-sided for endpoints
-Eigen::VectorXd estimateVelocities(const Eigen::VectorXd& t,
+Eigen::VectorXd estimate_velocities(const Eigen::VectorXd& t,
                                     const Eigen::VectorXd& q) {
     int n = q.size();
     Eigen::VectorXd v(n);
@@ -150,7 +150,7 @@ Eigen::VectorXd estimateVelocities(const Eigen::VectorXd& t,
 }
 
 // ── Finite-difference acceleration estimation ───────────────────────────────
-Eigen::VectorXd estimateAccelerations(const Eigen::VectorXd& t,
+Eigen::VectorXd estimate_accelerations(const Eigen::VectorXd& t,
                                        const Eigen::VectorXd& q) {
     int n = q.size();
     Eigen::VectorXd a(n);
@@ -171,15 +171,15 @@ Eigen::VectorXd estimateAccelerations(const Eigen::VectorXd& t,
 }
 
 // ── Per-joint quintic spline interpolation ──────────────────────────────────
-Eigen::VectorXd quinticSplineInterp(const Eigen::VectorXd& t_low,
+Eigen::VectorXd quintic_spline_interp(const Eigen::VectorXd& t_low,
                                      const Eigen::VectorXd& q_low,
                                      const Eigen::VectorXd& t_high) {
     int n      = t_low.size();
     int m      = t_high.size();
 
     // Estimate derivatives at knots
-    Eigen::VectorXd v_low = estimateVelocities(t_low, q_low);
-    Eigen::VectorXd a_low = estimateAccelerations(t_low, q_low);
+    Eigen::VectorXd v_low = estimate_velocities(t_low, q_low);
+    Eigen::VectorXd a_low = estimate_accelerations(t_low, q_low);
 
     Eigen::VectorXd q_high(m);
     int seg = 0;
@@ -193,7 +193,7 @@ Eigen::VectorXd quinticSplineInterp(const Eigen::VectorXd& t_low,
         double h = t_low(seg + 1) - t_low(seg);
         double s = (t - t_low(seg)) / h;  // normalize to [0, 1]
 
-        q_high(i) = quinticHermite(s, h,
+        q_high(i) = quintic_hermite(s, h,
                                     q_low(seg),   v_low(seg),   a_low(seg),
                                     q_low(seg+1), v_low(seg+1), a_low(seg+1));
     }
@@ -202,7 +202,7 @@ Eigen::VectorXd quinticSplineInterp(const Eigen::VectorXd& t_low,
 }
 
 // ── Main interpolation entry point ──────────────────────────────────────────
-std::vector<std::array<double, 7>> interpolateTo1kHz(
+std::vector<std::array<double, 7>> interpolate_to_1kHz(
         const std::vector<std::array<double, 7>>& traj_low,
         std::vector<double> time_low) {
 
@@ -226,7 +226,7 @@ std::vector<std::array<double, 7>> interpolateTo1kHz(
         for (int i = 0; i < n; ++i)
             q_low(i) = traj_low[i][j];
 
-        Eigen::VectorXd q_high = quinticSplineInterp(t_low, q_low, t_high);
+        Eigen::VectorXd q_high = quintic_spline_interp(t_low, q_low, t_high);
 
         for (int i = 0; i < n_high; ++i)
             traj_high[i][j] = q_high(i);
@@ -238,7 +238,7 @@ std::vector<std::array<double, 7>> interpolateTo1kHz(
 // ── Sanity checks ────────────────────────────────────────────────────────
 // Note: default value for rate_hz is declared in the header only —
 // repeating it here would be a compile error.
-void validateTrajectory(const std::vector<std::array<double, 7>>& traj,
+void validate_trajectory(const std::vector<std::array<double, 7>>& traj,
                          double rate_hz) {
     // Franka Panda limits
     constexpr double VEL_LIMIT  = 2.175;    // rad/s

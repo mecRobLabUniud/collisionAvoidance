@@ -85,7 +85,7 @@ target_link_libraries(rula_evaluation PRIVATE
 # ── Exec trajectory ──────────────────────────────────────────────────────────
 add_executable(exec_trajectory 
     src/exec_trajectory.cpp
-    src/trajectory_IO.cpp
+    src/trajectory_utils.cpp
 )
 target_link_libraries(exec_trajectory PRIVATE 
     Eigen3::Eigen
