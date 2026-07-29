@@ -6,12 +6,11 @@
 #include <iomanip>
 #include <algorithm>
 
-#include "load_trajectory.hpp"
+#include "trajectory_IO.hpp"
 
 // ── CSV I/O ────────────────────────────────────────────────────────────────
-std::vector<std::array<double, 7>> loadTrajectoryCSV(const std::string& path) {
+std::vector<std::array<double, 7>> load_trajectory_CSV(const std::string& path) {
     std::ifstream f(path);
-    if (!f) throw std::runtime_error("Cannot open: " + path);
 
     std::vector<std::array<double, 7>> traj;
     std::string line;
@@ -44,7 +43,7 @@ std::vector<std::array<double, 7>> loadTrajectoryCSV(const std::string& path) {
     return traj;
 }
 
-void saveTrajectoryCSV(const std::string& path,
+void save_trajectory_CSV(const std::string& path,
                        const std::vector<std::array<double, 7>>& traj) {
     std::ofstream f(path);
     if (!f) throw std::runtime_error("Cannot write: " + path);
@@ -62,7 +61,7 @@ void saveTrajectoryCSV(const std::string& path,
     std::cout << "Saved " << traj.size() << " waypoints to " << path << "\n";
 }
 
-std::vector<double> loadTimestampsCSV(const std::string& path) {
+std::vector<double> load_timestamps_CSV(const std::string& path) {
     std::ifstream f(path);
     if (!f) throw std::runtime_error("Cannot open: " + path);
 
@@ -97,7 +96,7 @@ std::vector<double> loadTimestampsCSV(const std::string& path) {
     return t;
 }
 
-void saveTimestampsCSV(const std::string& path,
+void save_timestamps_CSV(const std::string& path,
                        const std::vector<double>& times) {
     std::ofstream f(path);
     if (!f) throw std::runtime_error("Cannot write: " + path);

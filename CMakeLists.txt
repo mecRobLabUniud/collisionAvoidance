@@ -85,7 +85,7 @@ target_link_libraries(rula_evaluation PRIVATE
 # ── Exec trajectory ──────────────────────────────────────────────────────────
 add_executable(exec_trajectory 
     src/exec_trajectory.cpp
-    src/load_trajectory.cpp
+    src/trajectory_IO.cpp
 )
 target_link_libraries(exec_trajectory PRIVATE 
     Eigen3::Eigen
@@ -97,10 +97,10 @@ target_link_libraries(exec_trajectory PRIVATE
     rt
 )
 
-# ── Appendix A ───────────────────────────────────────────────────────────────
-add_executable(SSM_PFL_escape
-    src/SSM_PFL_escape.cpp
-)
-target_link_libraries(SSM_PFL_escape PRIVATE 
-    Eigen3::Eigen
-)
+# # ── Appendix A ───────────────────────────────────────────────────────────────
+# add_executable(SSM_PFL_escape
+#     src/SSM_PFL_escape.cpp
+# )
+# target_link_libraries(SSM_PFL_escape PRIVATE 
+#     Eigen3::Eigen
+# )

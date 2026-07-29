@@ -6,8 +6,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <charconv>
 
-#include "load_trajectory.hpp"
+#include "trajectory_IO.hpp"
 #include "data_transmitter.hpp"
 
 // Global flag, set by the signal handler
@@ -18,38 +19,34 @@ void signalHandler(int signum) {
     running = false;
 }
 
-int main(int argc, char* argv[]) {
-    std::signal(SIGINT, signalHandler);  // Ctrl+C
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Execute trajectory
+// ─────────────────────────────────────────────────────────────────────────────
+int exec_trajectory (int n_traj) {
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);
-    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 12, "ROBOT", 7000);
 
-    /* if (argc < 4) {
-        std::cerr << "Usage: " << argv[0]
-                  << " <input.bin> <output.bin> <source_rate_hz>\n";
+    std::signal(SIGINT, signalHandler);
+
+    std::string trajectory_path = "../src/trajectories/test" + std::to_string(n_traj) + "/";
+    std::ifstream f(trajectory_path);
+    try {
+        if (!f) throw 1;
+    }
+    catch (int err) {
+        std::cerr << "Error: cannot open '" + trajectory_path + "'" << std::endl;
         return 1;
     }
 
-    std::string input_path  = argv[1];
-    std::string output_path = argv[2];
-    double      source_rate = std::stod(argv[3]);
-
-    auto traj_low  = loadBin(input_path);
-    std::cout << "Loaded " << traj_low.size()
-              << " waypoints @ " << source_rate << " Hz\n"; */
-
-    std::string trajectory_path = "../src/trajectories/test/";
-    int columns = 7;
-
-    std::vector<std::array<double, 7>> traj_low = loadTrajectoryCSV(trajectory_path + "q.csv");
-    std::vector<double> t_low = loadTimestampsCSV(trajectory_path + "t.csv");
+    std::vector<std::array<double, 7>> traj_low = load_trajectory_CSV(trajectory_path + "q.csv");
+    std::vector<double> t_low = load_timestamps_CSV(trajectory_path + "t.csv");
     std::cout << "Loaded " << traj_low.size() << "\n";
 
     auto traj_high = interpolateTo1kHz(traj_low, t_low);
     std::cout << "Interpolated to " << traj_high.size()
               << " waypoints @ " << 1000.0 << " Hz\n";
 
-    saveTrajectoryCSV(trajectory_path + "q_1kHz.csv",  traj_high);
+    save_trajectory_CSV(trajectory_path + "q_1kHz.csv",  traj_high);
 
     // validateTrajectory(traj_high);
     // saveBin(output_path, traj_high);
@@ -92,6 +89,44 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_until(next_time);
     }
 
-    printf("Exiting cleanly...\n");
+    return 0;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Entry point
+// ─────────────────────────────────────────────────────────────────────────────
+int main(int argc, char* argv[]) {
+    int n_traj = 0;
+    if (argc > 1) {
+        try {
+            std::string arg(argv[1]);
+
+            // Use C++17 std::from_chars for strict, no-exception parsing
+            const char* begin = arg.data();
+            const char* end   = arg.data() + arg.size();
+            auto [ptr, ec] = std::from_chars(begin, end, n_traj);
+
+            // Success if no error AND we consumed the whole string
+            if (ec != std::errc{} || ptr != end)
+                throw 1;
+        }
+        catch (int err) {
+            std::cerr << "Error: argument must be a valid integer." << std::endl;
+            return 1;
+        }
+    }
+    else {
+        std::cerr << "Error: argument required." << std::endl;
+        return 1;
+    }
+
+    if (exec_trajectory(n_traj)) {
+        return 1;
+    }
+    else {
+        printf("Exiting cleanly...\n");
+    }
+    
     return 0;
 }
