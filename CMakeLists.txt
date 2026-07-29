@@ -21,49 +21,52 @@ pkg_check_modules(ZMQ REQUIRED libzmq)
 # --- INCLUDE ---
 include_directories(
     ${ZMQ_INCLUDE_DIRS}
+    # ${CMAKE_SOURCE_DIR}
+    # ${EIGEN3_INCLUDE_DIR}
     include
 )
 
 # --- ESEGUIBILE ---
-add_executable(robot_control 
-    src/robot_control.cpp 
-    src/examples_common.cpp
-)
+# add_executable(robot_control 
+#     src/robot_control.cpp 
+#     src/examples_common.cpp
+# )
+# 
+# target_link_libraries(robot_control PRIVATE 
+#     Franka::Franka 
+#     Eigen3::Eigen 
+#     ${ZMQ_LIBRARIES} 
+#     Threads::Threads
+# )
+# 
+# add_executable(joint_point_to_point_motion 
+#     src/joint_point_to_point_motion.cpp 
+#     src/examples_common.cpp
+# )
+# target_link_libraries(joint_point_to_point_motion PRIVATE 
+#     Franka::Franka 
+#     Eigen3::Eigen
+# )
+# 
+# add_executable(record_trajectory 
+#     src/record_trajectory.cpp
+# )
+# target_link_libraries(record_trajectory PRIVATE 
+#     Franka::Franka 
+#     Eigen3::Eigen 
+#     Threads::Threads
+# )
+# 
+# add_executable(replay_trajectory 
+#     src/replay_trajectory.cpp 
+#     src/examples_common.cpp
+# )
+# target_link_libraries(replay_trajectory PRIVATE 
+#     Franka::Franka 
+#     Eigen3::Eigen
+# )
 
-target_link_libraries(robot_control PRIVATE 
-    Franka::Franka 
-    Eigen3::Eigen 
-    ${ZMQ_LIBRARIES} 
-    Threads::Threads
-)
-
-add_executable(joint_point_to_point_motion 
-    src/joint_point_to_point_motion.cpp 
-    src/examples_common.cpp
-)
-target_link_libraries(joint_point_to_point_motion PRIVATE 
-    Franka::Franka 
-    Eigen3::Eigen
-)
-
-add_executable(record_trajectory 
-    src/record_trajectory.cpp
-)
-target_link_libraries(record_trajectory PRIVATE 
-    Franka::Franka 
-    Eigen3::Eigen 
-    Threads::Threads
-)
-
-add_executable(replay_trajectory 
-    src/replay_trajectory.cpp 
-    src/examples_common.cpp
-)
-target_link_libraries(replay_trajectory PRIVATE 
-    Franka::Franka 
-    Eigen3::Eigen
-)
-
+# ── RULA evaluation ──────────────────────────────────────────────────────────
 add_executable(rula_evaluation
     src/rula_evaluation.cpp
     src/rula_score_computation.cpp
@@ -79,6 +82,7 @@ target_link_libraries(rula_evaluation PRIVATE
     rt
 )
 
+# ── Exec trajectory ──────────────────────────────────────────────────────────
 add_executable(exec_trajectory 
     src/exec_trajectory.cpp
     src/load_trajectory.cpp
@@ -91,4 +95,12 @@ target_link_libraries(exec_trajectory PRIVATE
     nlohmann_json::nlohmann_json
     pthread
     rt
+)
+
+# ── Appendix A ───────────────────────────────────────────────────────────────
+add_executable(SSM_PFL_escape
+    src/SSM_PFL_escape.cpp
+)
+target_link_libraries(SSM_PFL_escape PRIVATE 
+    Eigen3::Eigen
 )

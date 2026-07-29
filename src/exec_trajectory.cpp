@@ -18,7 +18,7 @@ void signalHandler(int signum) {
     running = false;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     std::signal(SIGINT, signalHandler);  // Ctrl+C
 
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);

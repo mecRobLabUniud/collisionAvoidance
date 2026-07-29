@@ -14,6 +14,7 @@ mode=""
 use_gui=false
 use_robot=false
 n_test=""
+n_traj=""
 
 print_usage() {
     cat <<EOF
@@ -29,6 +30,7 @@ Options:
   --gui             Launch the web interface
   --test N          Test number to stream (only used with --stream)
   --robot           Include robot simulation
+  --traj N          Traj number to execute (only used with --robot)
   -h, --help        Show this help message
 EOF
 }
@@ -64,6 +66,18 @@ while [ $# -gt 0 ]; do
             n_test="${1#*=}"
             shift
             ;;
+        --traj)
+            n_traj="${2:-}"
+            if [ -z "$n_traj" ]; then
+                echo "Error: --traj requires a value." >&2
+                exit 1
+            fi
+            shift 2
+            ;;
+        --traj=*)
+            n_traj="${1#*=}"
+            shift
+            ;;
         -h|--help)
             print_usage
             exit 0
@@ -92,6 +106,7 @@ data_merging="python3 $dir/scripts/data_merging.py"
 web_interface="python3 $dir/scripts/web_interface.py"
 calibration="python3 $dir/scripts/calibration.py"
 rula_evaluation="$dir/build/rula_evaluation"
+exec_trajectory="$dir/build/exec_trajectory"
 
 case "$mode" in
     --track)
