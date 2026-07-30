@@ -37,6 +37,7 @@ stream_cnt = 0
 n_devices = 0
 frame_id = 0
 paused = False
+reset = False
 script_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(script_dir, "data")
 os.makedirs(data_dir, exist_ok=True)
@@ -80,12 +81,13 @@ def record_data(dtrs, skeleton_data_writers, color_writers):
 # ─────────────────────────────────────────────────────────────────────────────
 @set_rate(60)
 def stream_data(dtss, skeleton_data_readers, color_readers):
-    global stream_cnt
+    global stream_cnt, reset
     for dts, skeleton_data_reader, color_reader in zip(dtss, skeleton_data_readers, color_readers):
         with open(skeleton_data_reader, "r") as file:
             lines = file.readlines()
             if stream_cnt >= len(lines):
-                return "reset"
+                reset = True
+                break
             skeleton_data_packed = lines[stream_cnt]
 
             time, _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 3)
@@ -96,7 +98,6 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
         ret, frame = color_reader.read()
         if ret:
             dts.send_frames(frame)
-
     stream_cnt += 1
 
 
@@ -104,7 +105,7 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
 # Entry point 
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    global n_devices, stream_cnt
+    global n_devices, stream_cnt, reset
     
     arg1 = sys.argv[1] if len(sys.argv) > 1 else None
     arg2 = sys.argv[2] if len(sys.argv) > 2 else None
@@ -114,12 +115,12 @@ def main():
     # input_thread = threading.Thread(target=listen_for_input, daemon=True)
     # input_thread.start()
 
-    # # Clear shutdown logic
-    # def signal_handler(sig, frame):
-    #     global running
-    #     running = False
-    # signal.signal(signal.SIGINT, signal_handler)
-    # signal.signal(signal.SIGTERM, signal_handler)
+    # Clear shutdown logic
+    def signal_handler(sig, frame):
+        global running
+        running = False
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     skeleton_data_dir = os.path.join(data_dir, f"skeleton_data")
     media_dir = os.path.join(data_dir, f"media")
@@ -174,8 +175,9 @@ def main():
         try:
             while running:
                 if not paused:
-                    res = stream_data(dtss, skeleton_data_readers, color_readers)
-                    if res == "reset":
+                    stream_data(dtss, skeleton_data_readers, color_readers)
+                    if reset:
+                        reset = False
                         color_readers = [cv2.VideoCapture(os.path.join(media_test_dir, f"color_{n}.avi")) for n in range(n_devices)]
                         stream_cnt = 0
                 else:

@@ -5,7 +5,9 @@ project(skeleton_tracking CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- DIPENDENZE ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(Franka 0.8.0 REQUIRED)
 find_package(Threads REQUIRED)
@@ -18,7 +20,9 @@ pkg_check_modules(ZMQ REQUIRED libzmq)
 # find_package(casadi REQUIRED)
 # find_package(pinocchio REQUIRED)
 
-# --- INCLUDE ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Includes
+# ─────────────────────────────────────────────────────────────────────────────
 include_directories(
     ${ZMQ_INCLUDE_DIRS}
     # ${CMAKE_SOURCE_DIR}
@@ -26,7 +30,9 @@ include_directories(
     include
 )
 
-# --- ESEGUIBILE ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Executables
+# ─────────────────────────────────────────────────────────────────────────────
 # add_executable(robot_control 
 #     src/robot_control.cpp 
 #     src/examples_common.cpp
@@ -82,12 +88,12 @@ target_link_libraries(rula_evaluation PRIVATE
     rt
 )
 
-# ── Exec trajectory ──────────────────────────────────────────────────────────
-add_executable(exec_trajectory 
-    src/exec_trajectory.cpp
+# ── Main ─────────────────────────────────────────────────────────────────────
+add_executable(main 
+    src/main.cpp
     src/trajectory_utils.cpp
 )
-target_link_libraries(exec_trajectory PRIVATE 
+target_link_libraries(main PRIVATE 
     Eigen3::Eigen
     ${ZMQ_LIBRARIES}
     Threads::Threads

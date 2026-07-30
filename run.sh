@@ -109,7 +109,7 @@ data_merging="python3 $dir/scripts/data_merging.py"
 web_interface="python3 $dir/scripts/web_interface.py"
 calibration="python3 $dir/scripts/calibration.py"
 rula_evaluation="$dir/build/rula_evaluation"
-exec_trajectory="$dir/build/exec_trajectory"
+exec_trajectory="$dir/build/main"
 
 case "$mode" in
     --track)

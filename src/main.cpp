@@ -21,9 +21,15 @@ void signal_handler(int signum) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Main loop implementing SSM strategy
+// ─────────────────────────────────────────────────────────────────────────────
+// int SSM_strategy (int n_traj, std::string c_dir="") {
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Execute trajectory
 // ─────────────────────────────────────────────────────────────────────────────
-int exec_trajectory (int n_traj, std::string c_dir="") {
+int load_trajectory (int n_traj, std::string c_dir="") {
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);
 
     std::signal(SIGINT, signal_handler);
@@ -43,16 +49,13 @@ int exec_trajectory (int n_traj, std::string c_dir="") {
     auto traj_high = interpolate_to_1kHz(traj_low, t_low);
     save_trajectory_CSV(trajectory_path + "q_1kHz.csv",  traj_high);
 
-    const double rate_hz = 30.0; // <-- control your loop rate here
+    const double rate_hz = 60.0;
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
-
     auto next_time = std::chrono::steady_clock::now();
     auto loop_start = std::chrono::steady_clock::now();
-
     while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
-
         const std::vector<std::array<double, 3>> p = {{0, 0, 0}};
         const std::vector<int> _ = {};
 
@@ -62,13 +65,14 @@ int exec_trajectory (int n_traj, std::string c_dir="") {
             std::vector<nlohmann::json> payload;
             payload.push_back(p);
             payload.push_back(q);
-            payload.push_back(_);
-
+            payload.push_back(std::vector<int>{});
             dts.send_skeleton_data(payload);
         }
         else {
             loop_start = std::chrono::steady_clock::now();
         }
+
+        // SSM_strategy()
         
         next_time += std::chrono::duration_cast<std::chrono::steady_clock::duration>(period);
         std::this_thread::sleep_until(next_time);
@@ -111,7 +115,7 @@ int main(int argc, char* argv[]) {
         path = c_dir + "/../";
     }
 
-    if (exec_trajectory(n_traj, path)) {
+    if (load_trajectory(n_traj, path)) {
         return 1;
     }
     else {
