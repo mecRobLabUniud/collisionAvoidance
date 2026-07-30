@@ -30,7 +30,8 @@ void signal_handler(int signum) {
 // Execute trajectory
 // ─────────────────────────────────────────────────────────────────────────────
 int load_trajectory (int n_traj, std::string c_dir="") {
-    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT", 7000);
+    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
+    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
 
     std::signal(SIGINT, signal_handler);
 

@@ -120,9 +120,8 @@ int main() {
     
     auto t0 = std::chrono::steady_clock::now();
 
-    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED", 7000);
-    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 11, "RULA", 7000);
-    // DataTransmitter dtr_rula = DataTransmitter(DataTransmitter::Mode::Receiver, 11, "RULA", 7000);
+    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
+    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 11, "RULA");
     while (true) {
         if (true) {
             auto start = std::chrono::steady_clock::now();

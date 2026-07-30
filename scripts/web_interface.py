@@ -148,9 +148,9 @@ def main():
             raise ValueError(f"Wrong argument: {arg2}")
 
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-    if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT", port=7000))
-    dtrs.append(DataTransmitter("receiver", 11, "RULA", port=7000))
-    dtrs.append(DataTransmitter("receiver", 10, "MERGED", port=7000))
+    if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT"))
+    dtrs.append(DataTransmitter("receiver", 11, "RULA"))
+    dtrs.append(DataTransmitter("receiver", 10, "MERGED"))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()
