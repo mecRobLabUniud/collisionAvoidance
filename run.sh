@@ -13,6 +13,7 @@ dir="$(dirname "$0")"
 mode=""
 use_gui=false
 use_robot=false
+use_traj=false
 n_test=""
 n_traj=""
 
@@ -72,10 +73,12 @@ while [ $# -gt 0 ]; do
                 echo "Error: --traj requires a value." >&2
                 exit 1
             fi
+            use_traj=true
             shift 2
             ;;
         --traj=*)
             n_traj="${1#*=}"
+            use_traj=true
             shift
             ;;
         -h|--help)
@@ -118,12 +121,10 @@ case "$mode" in
         if [ "$use_gui" = true ]; then
             sleep 1
             if [ "$use_robot" = true ]; then
-                $exec_trajectory "$n_traj" & 
-                $web_interface "$n_devices" "--robot"
-                
-                if [ -nz "$n_traj" ]; then
-                    $exec_trajectory "$n_traj" "$dir"
+                if [ "$use_traj" = true ]; then
+                    $exec_trajectory "$n_traj" "$dir" &
                 fi
+                $web_interface "$n_devices" "--robot"
             else
                 $web_interface "$n_devices"
             fi
@@ -160,6 +161,9 @@ case "$mode" in
         if [ "$use_gui" = true ]; then
             sleep 1
             if [ "$use_robot" = true ]; then
+                if [ "$use_traj" = true ]; then
+                    $exec_trajectory "$n_traj" "$dir" &
+                fi
                 $web_interface "$n_devices" "--robot"
             else
                 $web_interface "$n_devices"

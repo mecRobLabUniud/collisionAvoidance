@@ -40,12 +40,7 @@ int exec_trajectory (int n_traj, std::string c_dir="") {
 
     std::vector<std::array<double, 7>> traj_low = load_trajectory_CSV(trajectory_path + "q.csv");
     std::vector<double> t_low = load_timestamps_CSV(trajectory_path + "t.csv");
-    std::cout << "Loaded " << traj_low.size() << "\n";
-
     auto traj_high = interpolate_to_1kHz(traj_low, t_low);
-    std::cout << "Interpolated to " << traj_high.size()
-              << " waypoints @ " << 1000.0 << " Hz\n";
-
     save_trajectory_CSV(trajectory_path + "q_1kHz.csv",  traj_high);
 
     const double rate_hz = 30.0; // <-- control your loop rate here
@@ -54,21 +49,14 @@ int exec_trajectory (int n_traj, std::string c_dir="") {
     auto next_time = std::chrono::steady_clock::now();
     auto loop_start = std::chrono::steady_clock::now();
 
-    while (running)
-    {
-        
-
+    while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
 
         const std::vector<std::array<double, 3>> p = {{0, 0, 0}};
         const std::vector<int> _ = {};
 
-        if (elapsed_ms <= traj_high.size()) {
-            printf("t: %i ms - q: %.6f %.6f %.6f %.6f %.6f %.6f %.6f \n", elapsed_ms, 
-                traj_high[elapsed_ms][0], traj_high[elapsed_ms][1], traj_high[elapsed_ms][2], traj_high[elapsed_ms][3], 
-                traj_high[elapsed_ms][4], traj_high[elapsed_ms][5], traj_high[elapsed_ms][6]);
-
+        if (elapsed_ms < traj_high.size()) {
             std::vector<double> q(traj_high[elapsed_ms].begin(), traj_high[elapsed_ms].end());
 
             std::vector<nlohmann::json> payload;
@@ -77,6 +65,9 @@ int exec_trajectory (int n_traj, std::string c_dir="") {
             payload.push_back(_);
 
             dts.send_skeleton_data(payload);
+        }
+        else {
+            loop_start = std::chrono::steady_clock::now();
         }
         
         next_time += std::chrono::duration_cast<std::chrono::steady_clock::duration>(period);
@@ -96,13 +87,9 @@ int main(int argc, char* argv[]) {
     if (argc > 1) {
         try {
             std::string arg(argv[1]);
-
-            // Use C++17 std::from_chars for strict, no-exception parsing
             const char* begin = arg.data();
             const char* end   = arg.data() + arg.size();
             auto [ptr, ec] = std::from_chars(begin, end, n_traj);
-
-            // Success if no error AND we consumed the whole string
             if (ec != std::errc{} || ptr != end)
                 throw 1;
         }
@@ -121,7 +108,7 @@ int main(int argc, char* argv[]) {
     } 
     else {
         std::string c_dir(get_current_dir_name());
-        path = c_dir + "/";
+        path = c_dir + "/../";
     }
 
     if (exec_trajectory(n_traj, path)) {
