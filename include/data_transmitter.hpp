@@ -186,7 +186,8 @@ public:
     ~DataTransmitter() {
         try {
             shutdown();
-        } catch (...) {
+        } 
+        catch (...) {
         }
     }
 

@@ -33,7 +33,7 @@ double angleDeg(const Vec3& a, const Vec3& b) {
     return std::acos(c) * 180.0 / M_PI;
 }
 
-Vec3 toVec3(const std::array<double, 3>& p) {
+Vec3 toVec3(const Eigen::Vector3d& p) {
     return {p[0], p[1], p[2]};
 }
 

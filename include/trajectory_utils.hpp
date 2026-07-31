@@ -40,15 +40,6 @@ Eigen::VectorXd estimate_accelerations(const Eigen::VectorXd& t,
 
 
 // ── Quintic Hermite basis function ──────────────────────────────────────────
-// Given normalized parameter s ∈ [0,1] and segment length h,
-// returns the quintic interpolated value.
-//
-//   p(s) = h00*p0 + h10*h*v0 + h20*h²*a0
-//         + h01*p1 + h11*h*v1 + h21*h²*a1
-//
-// Declared inline + defined here in the header since it's a small,
-// frequently-called function — this lets the compiler inline it at each
-// call site instead of requiring a separate translation unit each time.
 inline double quintic_hermite(double s, double h,
                               double p0, double v0, double a0,
                               double p1, double v1, double a1) {

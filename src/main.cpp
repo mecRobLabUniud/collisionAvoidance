@@ -10,6 +10,9 @@
 
 #include "trajectory_utils.hpp"
 #include "data_transmitter.hpp"
+#include "utils.hpp"
+#include "min_distance_calculation.hpp"
+
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
@@ -23,7 +26,19 @@ void signal_handler(int signum) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main loop implementing SSM strategy
 // ─────────────────────────────────────────────────────────────────────────────
-// int SSM_strategy (int n_traj, std::string c_dir="") {
+int SSM_strategy(DataTransmitter& dtr, DataTransmitter& dts, std::vector<double> q) {
+    std::vector<nlohmann::json> payload;
+    payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
+    payload.push_back(q);
+    payload.push_back(std::vector<int>{});
+    dts.send_skeleton_data(payload);
+
+    auto skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
+
+    
+
+    return 0;
+};
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,27 +72,22 @@ int load_trajectory (int n_traj, std::string c_dir="") {
     while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
-        const std::vector<std::array<double, 3>> p = {{0, 0, 0}};
-        const std::vector<int> _ = {};
-
         if (elapsed_ms < traj_high.size()) {
             std::vector<double> q(traj_high[elapsed_ms].begin(), traj_high[elapsed_ms].end());
 
-            std::vector<nlohmann::json> payload;
-            payload.push_back(p);
-            payload.push_back(q);
-            payload.push_back(std::vector<int>{});
-            dts.send_skeleton_data(payload);
+            // ── SSM strategy ─────────────────────────────────────────────────────────────
+            SSM_strategy(dtr, dts, q);
         }
         else {
             loop_start = std::chrono::steady_clock::now();
         }
-
-        // SSM_strategy()
         
         next_time += std::chrono::duration_cast<std::chrono::steady_clock::duration>(period);
         std::this_thread::sleep_until(next_time);
     }
+
+    dtr.shutdown();
+    dts.shutdown();
 
     return 0;
 }

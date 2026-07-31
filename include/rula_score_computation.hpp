@@ -1,5 +1,5 @@
 #pragma once
-
+#include <Eigen/Core>
 #include <array>
 #include <cmath>
 #include <string>
@@ -48,7 +48,7 @@ enum KP {
     L_FOOT=19,      R_FOOT=20
 };
 
-using Skeleton = std::vector<std::array<double, 3>>;
+using Skeleton = std::vector<Eigen::Vector3d>;
 
 // Convert a raw keypoint array to Vec3
 Vec3 toVec3(const std::array<double, 3>& p);
