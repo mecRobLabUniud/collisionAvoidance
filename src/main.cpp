@@ -12,6 +12,7 @@
 #include "data_transmitter.hpp"
 #include "utils.hpp"
 #include "min_distance_calculation.hpp"
+#include "kinematics.hpp"
 
 
 // Global flag, set by the signal handler
@@ -33,9 +34,8 @@ int SSM_strategy(DataTransmitter& dtr, DataTransmitter& dts, std::vector<double>
     payload.push_back(std::vector<int>{});
     dts.send_skeleton_data(payload);
 
-    auto skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
+    std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
 
-    
 
     return 0;
 };
