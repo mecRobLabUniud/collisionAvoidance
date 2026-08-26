@@ -22,7 +22,7 @@ pinocchio::FrameIndex RobotModel::GetFrameIndexOrThrow(
   return model_.getFrameId(frame_name);
 }
 
-void RobotModel::ComputeFK(const Eigen::VectorXd& q) {
+void RobotModel::ComputeFK(const Eigen::VectorXd& q) const {
   if (q.size() != model_.nq) {
     throw std::runtime_error("Joint vector size does not match model DOF");
   }
@@ -31,7 +31,7 @@ void RobotModel::ComputeFK(const Eigen::VectorXd& q) {
 }
 
 Eigen::Isometry3d RobotModel::GetJointPose(const std::string& frame_name,
-                                            const Eigen::VectorXd& q) {
+                                            const Eigen::VectorXd& q) const {
   ComputeFK(q);
   return GetJointPose(frame_name);
 }

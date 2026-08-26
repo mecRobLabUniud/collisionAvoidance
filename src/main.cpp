@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <optional>
 #include <charconv>
 
 #include "trajectory_utils.hpp"
@@ -13,6 +14,9 @@
 #include "utils.hpp"
 #include "min_distance_calculation.hpp"
 #include "robot_model.hpp"
+
+#include "COLLcheck.hpp"
+// #include "SSMcheck.hpp"
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
@@ -22,61 +26,67 @@ void signal_handler(int signum) {
     running = false;
 }
 
+std::string strategy = "PFL";
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main loop implementing SSM strategy
+// Main loop implementing chosen strategy
 // ─────────────────────────────────────────────────────────────────────────────
-int SSM_strategy(DataTransmitter& dtr, DataTransmitter& dts, std::vector<double> q) {
-    std::vector<nlohmann::json> payload;
-    payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
-    payload.push_back(q);
-    payload.push_back(std::vector<int>{});
-    dts.send_skeleton_data(payload);
-
+int task_engine(DataTransmitter& dtr, DataTransmitter& dts, RobotModel robot, std::vector<double> q_vec) {
     std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
 
-    std::cout << q[0] << q[1] << q[2] << q[3] << q[4] << q[5] << q[6] << std::endl;
+    Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>(q_vec.data(), q_vec.size()));
+    double HR_clearance = 0.1;
+    bool flag = false;
+    for (const auto& point : skeleton) {
+        if (point.hasNaN()) continue;
 
+        flag = COLLcheck(robot, q, point, HR_clearance);
+        if (!flag) {
+            std::cout << "Collision detected with point: " << point.transpose() << std::endl;
+            break;
+        }
+    }
+
+    std::vector<nlohmann::json> payload;
+    payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
+    payload.push_back(q_vec);
+    payload.push_back(std::vector<int>{});
+    dts.send_skeleton_data(payload);
     
-
     return 0;
 };
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Execute trajectory
+// Load trajectory
 // ─────────────────────────────────────────────────────────────────────────────
-int load_trajectory (int n_traj, std::string c_dir="") {
-    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
-    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
-
-    std::signal(SIGINT, signal_handler);
-
+std::optional<std::vector<std::array<double, 7>>> load_trajectory(int n_traj, std::string c_dir) {
     std::string trajectory_path = c_dir + "src/trajectories/test" + std::to_string(n_traj) + "/";
-    printf("Loading trajectory %d from path: %s\n", n_traj, trajectory_path.c_str());
     std::ifstream f(trajectory_path);
     try {
         if (!f) throw 1;
     }
     catch (int err) {
         std::cerr << "Error: cannot open '" + trajectory_path + "'" << std::endl;
-        return 1;
+        return std::nullopt;
     }
 
     std::vector<std::array<double, 7>> traj_low = load_trajectory_CSV(trajectory_path + "q.csv");
     std::vector<double> t_low = load_timestamps_CSV(trajectory_path + "t.csv");
-    auto traj_high = interpolate_to_1kHz(traj_low, t_low);
+    std::vector<std::array<double, 7>> traj_high = interpolate_to_1kHz(traj_low, t_low);
     save_trajectory_CSV(trajectory_path + "q_1kHz.csv",  traj_high);
 
-    std::cout << std::endl << "── Starting trajectory ──────────────────────────────────────────────────────" << std::endl << std::endl;
+    return traj_high;
+}
 
 
 
 
 
 
-
+/*
     const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
 
     RobotModel robot(urdf_path);
@@ -129,24 +139,37 @@ int load_trajectory (int n_traj, std::string c_dir="") {
     } else {
         std::cout << "IK did not converge" << std::endl;
     }
+*/
 
 
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Execute task
+// ─────────────────────────────────────────────────────────────────────────────
+int execute_task (int n_traj, std::string c_dir="") {
+    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
+    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
 
+    auto traj = load_trajectory(n_traj, c_dir);
+    if (!traj) {
+        return 1;
+    }
 
     const double rate_hz = 5.0;
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
     auto next_time = std::chrono::steady_clock::now();
     auto loop_start = std::chrono::steady_clock::now();
+    const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
+    RobotModel robot(urdf_path);
+
+    // ── Task engine ──────────────────────────────────────────────────────────────
     while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
-        if (elapsed_ms < traj_high.size()) {
-            std::vector<double> q(traj_high[elapsed_ms].begin(), traj_high[elapsed_ms].end());
-
-            // ── SSM strategy ─────────────────────────────────────────────────────────────
-            SSM_strategy(dtr, dts, q);
+        if (elapsed_ms < traj->size()) {
+            std::vector<double> q((*traj)[elapsed_ms].begin(), (*traj)[elapsed_ms].end());
+            task_engine(dtr, dts, robot, q);
         }
         else {
             loop_start = std::chrono::steady_clock::now();
@@ -196,7 +219,9 @@ int main(int argc, char* argv[]) {
         path = c_dir + "/../";
     }
 
-    if (load_trajectory(n_traj, path)) {
+    std::signal(SIGINT, signal_handler);
+
+    if (execute_task(n_traj, path)) {
         return 1;
     }
     else {

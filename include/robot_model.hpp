@@ -21,11 +21,11 @@ class RobotModel {
   // Call this before GetJointPose() / ComputeJacobian() if you want them
   // to reflect a new q; ComputeFK() is otherwise called automatically
   // by the pose/Jacobian methods that take q directly.
-  void ComputeFK(const Eigen::VectorXd& q);
+  void ComputeFK(const Eigen::VectorXd& q) const;
 
   // Pose of a named frame/joint (as defined in the URDF) at configuration q.
   Eigen::Isometry3d GetJointPose(const std::string& frame_name,
-                                  const Eigen::VectorXd& q);
+                                  const Eigen::VectorXd& q) const;
 
   // Pose of a named frame/joint using the last configuration passed to
   // ComputeFK(). Cheaper if you need several frames at the same q.
@@ -60,5 +60,5 @@ class RobotModel {
       const std::string& frame_name) const;
 
   pinocchio::Model model_;
-  pinocchio::Data data_;
+  mutable pinocchio::Data data_;
 };
