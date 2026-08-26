@@ -118,12 +118,14 @@ case "$mode" in
         sleep 0.1
         $camera_stream &
         $rula_evaluation &
+        if [ "$use_robot" = true ]; then
+            if [ "$use_traj" = true ]; then
+                $exec_trajectory "$n_traj" "$dir" &
+            fi
+        fi
         if [ "$use_gui" = true ]; then
             sleep 1
             if [ "$use_robot" = true ]; then
-                if [ "$use_traj" = true ]; then
-                    $exec_trajectory "$n_traj" "$dir" &
-                fi
                 $web_interface "$n_devices" "--robot"
             else
                 $web_interface "$n_devices"
@@ -158,12 +160,14 @@ case "$mode" in
         $data_recording "$n_devices" "-s" "$n_test" &
         $data_merging "$n_devices" &
         $rula_evaluation &
+        if [ "$use_robot" = true ]; then
+            if [ "$use_traj" = true ]; then
+                $exec_trajectory "$n_traj" "$dir" &
+            fi
+        fi
         if [ "$use_gui" = true ]; then
             sleep 1
             if [ "$use_robot" = true ]; then
-                if [ "$use_traj" = true ]; then
-                    $exec_trajectory "$n_traj" "$dir" &
-                fi
                 $web_interface "$n_devices" "--robot"
             else
                 $web_interface "$n_devices"
