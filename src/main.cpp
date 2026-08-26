@@ -12,7 +12,7 @@
 #include "data_transmitter.hpp"
 #include "utils.hpp"
 #include "min_distance_calculation.hpp"
-#include "panda_jacobian.hpp"
+#include "robot_model.hpp"
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
@@ -79,7 +79,56 @@ int load_trajectory (int n_traj, std::string c_dir="") {
 
     const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
 
-    
+    RobotModel robot(urdf_path);
+
+    Eigen::VectorXd q(7);
+    q << 0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785;  // Panda "ready" pose
+
+    // Forward kinematics + pose lookup
+    Eigen::Isometry3d ee_pose = robot.GetJointPose("panda_link0", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link1", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link2", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link3", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;      
+    ee_pose = robot.GetJointPose("panda_link4", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link5", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link6", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;
+    ee_pose = robot.GetJointPose("panda_link7", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl;     
+    ee_pose = robot.GetJointPose("panda_link8", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl; 
+
+
+    // Jacobian at same q
+    Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q);
+    std::cout << "Jacobian (6x7):\n" << J << std::endl;
+
+    // Inverse kinematics: try to reach a slightly perturbed target
+    Eigen::Isometry3d target = ee_pose;
+    target.translation().z() += 0.05;
+
+    Eigen::VectorXd q_solution;
+    bool ok = robot.ComputeIK("panda_link8", target, q, &q_solution);
+    if (ok) {
+        std::cout << "IK solution: " << q_solution.transpose() << std::endl;
+    } else {
+        std::cout << "IK did not converge" << std::endl;
+    }
 
 
 
@@ -95,22 +144,6 @@ int load_trajectory (int n_traj, std::string c_dir="") {
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
         if (elapsed_ms < traj_high.size()) {
             std::vector<double> q(traj_high[elapsed_ms].begin(), traj_high[elapsed_ms].end());
-
-
-
-
-
-
-            PandaJacobian panda_jacobian(urdf_path, "panda_link8");
-
-            Eigen::VectorXd q_vec(Eigen::Map<Eigen::VectorXd>(q.data(), q.size()));
-
-            Eigen::MatrixXd J = panda_jacobian.ComputeJacobian(q_vec);
-            std::cout << "Jacobian (6x7):\n" << J << std::endl;
-
-
-
-
 
             // ── SSM strategy ─────────────────────────────────────────────────────────────
             SSM_strategy(dtr, dts, q);

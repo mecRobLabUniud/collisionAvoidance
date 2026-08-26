@@ -93,7 +93,7 @@ target_link_libraries(rula_evaluation PRIVATE
 add_executable(main 
     src/main.cpp
     src/trajectory_utils.cpp
-    src/panda_jacobian.cpp
+    src/robot_model.cpp
 )
 target_link_libraries(main PRIVATE 
     Eigen3::Eigen
