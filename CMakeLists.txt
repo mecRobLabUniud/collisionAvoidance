@@ -14,6 +14,7 @@ find_package(Threads REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(pinocchio REQUIRED)
 pkg_check_modules(ZMQ REQUIRED libzmq)
 
 # CasADi e Pinocchio
@@ -92,6 +93,7 @@ target_link_libraries(rula_evaluation PRIVATE
 add_executable(main 
     src/main.cpp
     src/trajectory_utils.cpp
+    src/panda_jacobian.cpp
 )
 target_link_libraries(main PRIVATE 
     Eigen3::Eigen
@@ -101,6 +103,7 @@ target_link_libraries(main PRIVATE
     nlohmann_json::nlohmann_json
     pthread
     rt
+    pinocchio::pinocchio
 )
 
 # # ── Appendix A ───────────────────────────────────────────────────────────────
