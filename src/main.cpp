@@ -16,7 +16,7 @@
 #include "robot_model.hpp"
 
 #include "COLLcheck.hpp"
-// #include "SSMcheck.hpp"
+// #include "SSMPFL.hpp"
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
@@ -25,9 +25,6 @@ void signal_handler(int signum) {
     (void)signum;
     running = false;
 }
-
-std::string strategy = "PFL";
-
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,14 +36,32 @@ int task_engine(DataTransmitter& dtr, DataTransmitter& dts, RobotModel robot, st
     Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>(q_vec.data(), q_vec.size()));
     double HR_clearance = 0.1;
     bool flag = false;
-    for (const auto& point : skeleton) {
-        if (point.hasNaN()) continue;
+    // for (const auto& point : skeleton) {
+    //     if (point.hasNaN()) continue;
+// 
+    //     // SSMPFLResult res = SSMPFL(const RobotModel& robot,
+    //     //                     const Eigen::MatrixXd& q_limits,    // n x 2 [min max]
+    //     //                     const Eigen::MatrixXd& qdot_limits, // n x 2
+    //     //                     const Eigen::MatrixXd& qddot_limits,// n x 2
+    //     //                     double delta_t,
+    //     //                     double stopping_time,
+    //     //                     const Eigen::VectorXd& q_t,
+    //     //                     const Eigen::VectorXd& qdot_t,
+    //     //                     const Eigen::Vector3d& x_ref_tplusone,
+    //     //                     const Eigen::Vector3d& xd_ref_tplusone,
+    //     //                     const Eigen::VectorXd& /*qddot_suggestion*/, // unused in source too
+    //     //                     Eigen::Vector3d ro,
+    //     //                     const Eigen::Vector3d& vo,
+    //     //                     double delta,
+    //     //                     const Eigen::VectorXd& q_des,
+    //     //                     const Eigen::VectorXd& /*qd_des*/, // unused in source too
+    //     //                     double Qv)
+    // }
 
-        flag = COLLcheck(robot, q, point, HR_clearance);
-        if (!flag) {
-            std::cout << "Collision detected with point: " << point.transpose() << std::endl;
-            break;
-        }
+    std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q);
+
+    if (dist) {
+        std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
     }
 
     std::vector<nlohmann::json> payload;
@@ -152,9 +167,7 @@ int execute_task (int n_traj, std::string c_dir="") {
     DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
 
     auto traj = load_trajectory(n_traj, c_dir);
-    if (!traj) {
-        return 1;
-    }
+    if (!traj) return 1;
 
     const double rate_hz = 5.0;
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
@@ -221,12 +234,8 @@ int main(int argc, char* argv[]) {
 
     std::signal(SIGINT, signal_handler);
 
-    if (execute_task(n_traj, path)) {
-        return 1;
-    }
-    else {
-        printf("Exiting cleanly...\n");
-    }
+    if (execute_task(n_traj, path)) return 1;
+    else printf("Exiting cleanly...\n");
     
     return 0;
 }

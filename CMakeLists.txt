@@ -94,6 +94,7 @@ add_executable(main
     src/main.cpp
     src/trajectory_utils.cpp
     src/robot_model.cpp
+    src/min_distance_calculation.cpp
 )
 target_link_libraries(main PRIVATE 
     Eigen3::Eigen
