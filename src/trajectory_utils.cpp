@@ -170,70 +170,78 @@ Eigen::VectorXd estimate_accelerations(const Eigen::VectorXd& t,
     return a;
 }
 
-// ── Per-joint quintic spline interpolation ──────────────────────────────────
-Eigen::VectorXd quintic_spline_interp(const Eigen::VectorXd& t_low,
-                                     const Eigen::VectorXd& q_low,
-                                     const Eigen::VectorXd& t_high) {
-    int n      = t_low.size();
-    int m      = t_high.size();
 
-    // Estimate derivatives at knots
+// ── Per-joint quintic spline interpolation (pos + vel + acc) ───────────────
+void quintic_spline_interp_full(const Eigen::VectorXd& t_low,
+                                 const Eigen::VectorXd& q_low,
+                                 const Eigen::VectorXd& t_high,
+                                 Eigen::VectorXd& q_high,
+                                 Eigen::VectorXd& v_high,
+                                 Eigen::VectorXd& a_high) {
+    int n = t_low.size();
+    int m = t_high.size();
+
     Eigen::VectorXd v_low = estimate_velocities(t_low, q_low);
     Eigen::VectorXd a_low = estimate_accelerations(t_low, q_low);
 
-    Eigen::VectorXd q_high(m);
-    int seg = 0;
+    q_high.resize(m);
+    v_high.resize(m);
+    a_high.resize(m);
 
+    int seg = 0;
     for (int i = 0; i < m; ++i) {
         double t = t_high(i);
-
-        // Advance segment pointer
         while (seg < n - 2 && t > t_low(seg + 1)) ++seg;
 
         double h = t_low(seg + 1) - t_low(seg);
-        double s = (t - t_low(seg)) / h;  // normalize to [0, 1]
+        double s = (t - t_low(seg)) / h;
 
-        q_high(i) = quintic_hermite(s, h,
-                                    q_low(seg),   v_low(seg),   a_low(seg),
-                                    q_low(seg+1), v_low(seg+1), a_low(seg+1));
+        double q0 = q_low(seg),   v0 = v_low(seg),   a0 = a_low(seg);
+        double q1 = q_low(seg+1), v1 = v_low(seg+1), a1 = a_low(seg+1);
+
+        q_high(i) = quintic_hermite(s, h, q0, v0, a0, q1, v1, a1);
+        v_high(i) = quintic_hermite_vel(s, h, q0, v0, a0, q1, v1, a1);
+        a_high(i) = quintic_hermite_acc(s, h, q0, v0, a0, q1, v1, a1);
     }
-
-    return q_high;
 }
 
+
 // ── Main interpolation entry point ──────────────────────────────────────────
-std::vector<std::array<double, 7>> interpolate_to_1kHz(
+InterpolatedTrajectory interpolate_to_1kHz_full(
         const std::vector<std::array<double, 7>>& traj_low,
         std::vector<double> time_low) {
 
     int    n        = traj_low.size();
-    double duration = time_low[n-1]; // (n - 1) / source_rate_hz;
+    double duration = time_low[n-1];
     int    n_high   = static_cast<int>(duration * 1000.0);
 
-    std::cout << "Interpolating from " << n << " waypoints to "
-              << n_high << " waypoints over " << duration << " seconds\n";
-
-    // Time axes
     Eigen::VectorXd t_low(n), t_high(n_high);
-    for (int i = 0; i < n;     ++i) t_low(i)  = time_low[i];
+    for (int i = 0; i < n;      ++i) t_low(i)  = time_low[i];
     for (int i = 0; i < n_high; ++i) t_high(i) = i / 1000.0;
 
-    // Interpolate each of the 7 joints independently
-    std::vector<std::array<double, 7>> traj_high(n_high);
+    InterpolatedTrajectory out;
+    out.q.resize(n_high);
+    out.qd.resize(n_high);
+    out.qdd.resize(n_high);
 
     for (int j = 0; j < 7; ++j) {
         Eigen::VectorXd q_low(n);
         for (int i = 0; i < n; ++i)
             q_low(i) = traj_low[i][j];
 
-        Eigen::VectorXd q_high = quintic_spline_interp(t_low, q_low, t_high);
+        Eigen::VectorXd q_high, v_high, a_high;
+        quintic_spline_interp_full(t_low, q_low, t_high, q_high, v_high, a_high);
 
-        for (int i = 0; i < n_high; ++i)
-            traj_high[i][j] = q_high(i);
+        for (int i = 0; i < n_high; ++i) {
+            out.q[i][j] = q_high(i);
+            out.qd[i][j] = v_high(i);
+            out.qdd[i][j] = a_high(i);
+        }
     }
 
-    return traj_high;
+    return out;
 }
+
 
 // ── Sanity checks ────────────────────────────────────────────────────────
 // Note: default value for rate_hz is declared in the header only —
