@@ -53,7 +53,7 @@ state = 1
 @set_rate(60)
 def send_rula_score():
     try:
-        score = dtrs[-2].receive_rula_score()
+        score = dtrs[n_devices+1].receive_rula_score()
         socketio.emit("update_rula", score)
         
     except Exception as e:
@@ -71,16 +71,16 @@ def rula_thread():
 def send_data():
     global cnt, state
     try:
-        merged_skeleton = dtrs[-1].receive_data()[0]
+        merged_skeleton = dtrs[n_devices].receive_data()[0]
         
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
         if use_robot:
-            robot_p = dtrs[-3].receive_data()[0]
-            robot_q = dtrs[-3].receive_data()[1]
-            caps_radius = dtrs[-3].receive_data()[2]
+            robot_p = dtrs[n_devices+2].receive_data()[0]
+            robot_q = dtrs[n_devices+2].receive_data()[1]
+            caps_radius = dtrs[n_devices+2].receive_data()[2]
 
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
@@ -88,7 +88,12 @@ def send_data():
             q_robot = [q if not np.isnan(q) else None for q in robot_q]
             radius = [radius if not np.isnan(radius) else None for radius in caps_radius]
 
-            msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius}
+            c_h = dtrs[n_devices+3].receive_data()[0]
+            c_r = dtrs[n_devices+3].receive_data()[1]
+
+            print(f"c_h: {c_h}, c_r: {c_r}")
+
+            msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius, "c_h": c_h, "c_r": c_r}
         else:
             msg = {"x": x, "y": y, "z": z}
 
@@ -148,9 +153,11 @@ def main():
             raise ValueError(f"Wrong argument: {arg2}")
 
     dtrs = [DataTransmitter("receiver", n, "SINGLE_CAMERA") for n in range(n_devices)]
-    if use_robot: dtrs.append(DataTransmitter("receiver", 12, "ROBOT"))
-    dtrs.append(DataTransmitter("receiver", 11, "RULA"))
     dtrs.append(DataTransmitter("receiver", 10, "MERGED"))
+    dtrs.append(DataTransmitter("receiver", 11, "RULA"))
+    if use_robot: 
+        dtrs.append(DataTransmitter("receiver", 12, "ROBOT"))
+        dtrs.append(DataTransmitter("receiver", 13, "DISTANCE"))
 
     threading.Thread(target=skeleton_thread, daemon=True).start()              
     threading.Thread(target=frame_thread, daemon=True).start()

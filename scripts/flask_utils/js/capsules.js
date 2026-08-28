@@ -157,7 +157,7 @@ import { scene } from './scene.js'
 // ─────────────────────────────────────────────────────────────────────────────
 // Parameters
 // ─────────────────────────────────────────────────────────────────────────────
-const COCO_SKELETON = [[0, 9], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [6, 8], [9, 10], [11, 13], [12, 14], [13, 15], [14, 16], [17, 19], [18, 20]];
+const MP_SKELETON = [[0, 9], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [6, 8], [9, 10], [11, 13], [12, 14], [13, 15], [14, 16], [17, 19], [18, 20]];
 const r_sw_h = [0.16, 0.06, 0.06, 0.06, 0.06, 0.1, 0.1, 0.15, 0.1, 0.1, 0.08, 0.08, 0.05, 0.05];
 const ROBOT_CONFIG = [[0, 1], [2, 3], [4, 5], [6, 7]];
 const rv = [0.085, 0.085, 0.06, 0.065];
@@ -166,11 +166,11 @@ let rula = true;
 const socket = io();
 
 let human_caps = []
-for (const _ of COCO_SKELETON) {
+for (const _ of MP_SKELETON) {
     human_caps.push(createCapsule());
 }
 let robot_caps = []
-for (const _ of COCO_SKELETON) {
+for (const _ of MP_SKELETON) {
     robot_caps.push(createCapsule());
 }
 
@@ -249,9 +249,9 @@ function update_plot() {
     socket.on('update_plot', function (point) {
         const r_sw_r = point.radius;
         
-        for (let i = 0; i < COCO_SKELETON.length; i++) {
-            const a = COCO_SKELETON[i][0];
-            const b = COCO_SKELETON[i][1];
+        for (let i = 0; i < MP_SKELETON.length; i++) {
+            const a = MP_SKELETON[i][0];
+            const b = MP_SKELETON[i][1];
             if (point.x[a] != null && point.x[b] != null) {
                 human_caps[i] = updateCapsule(
                         human_caps[i],

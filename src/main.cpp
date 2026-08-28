@@ -43,6 +43,11 @@ int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, Rob
     payload.push_back(q_vec);
     payload.push_back(std::vector<int>{});
     transmitters[1]->send_data(payload);
+
+    payload.clear();
+    payload.push_back(dist->c_h);
+    payload.push_back(dist->c_r);
+    transmitters[2]->send_data(payload);
     
     return 0;
 };
@@ -149,7 +154,7 @@ int execute_task (int n_traj, std::string c_dir="") {
     auto traj = load_trajectory(n_traj, c_dir);
     if (!traj) return 1;
 
-    const double rate_hz = 5.0;
+    const double rate_hz = 16.0;
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
     auto next_time = std::chrono::steady_clock::now();
     auto loop_start = std::chrono::steady_clock::now();
