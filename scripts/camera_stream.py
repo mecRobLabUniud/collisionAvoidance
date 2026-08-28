@@ -72,7 +72,7 @@ def tracking(dtss, trackers, rotation_matrices):
             skeleton = transform_points(rotation_matrix, skeleton.astype(np.float64)).astype(np.float32)
             confidence = confidence.astype(np.float32)
 
-            dts.send_skeleton_data(skeleton, confidence)
+            dts.send_data(skeleton, confidence)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -93,7 +93,7 @@ def stream_data(dtss, skeleton_data_readers, color_readers):
             time, _, skeleton_packed, confidence_packed = skeleton_data_packed.split("; ", 3)
             skeleton = np.array(json.loads(skeleton_packed))
             confidence = np.array(json.loads(confidence_packed))
-            dts.send_skeleton_data(skeleton, confidence)
+            dts.send_data(skeleton, confidence)
 
         ret, frame = color_reader.read()
         if ret:

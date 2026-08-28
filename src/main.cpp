@@ -30,45 +30,19 @@ void signal_handler(int signum) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main loop implementing chosen strategy
 // ─────────────────────────────────────────────────────────────────────────────
-int task_engine(DataTransmitter& dtr, DataTransmitter& dts, RobotModel robot, std::vector<double> q_vec) {
-    std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
-
+int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, RobotModel robot, std::vector<double> q_vec) {
+    std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(transmitters[0]->receive_data()[0]);
     Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>(q_vec.data(), q_vec.size()));
-    double HR_clearance = 0.1;
-    bool flag = false;
-    // for (const auto& point : skeleton) {
-    //     if (point.hasNaN()) continue;
-// 
-    //     // SSMPFLResult res = SSMPFL(const RobotModel& robot,
-    //     //                     const Eigen::MatrixXd& q_limits,    // n x 2 [min max]
-    //     //                     const Eigen::MatrixXd& qdot_limits, // n x 2
-    //     //                     const Eigen::MatrixXd& qddot_limits,// n x 2
-    //     //                     double delta_t,
-    //     //                     double stopping_time,
-    //     //                     const Eigen::VectorXd& q_t,
-    //     //                     const Eigen::VectorXd& qdot_t,
-    //     //                     const Eigen::Vector3d& x_ref_tplusone,
-    //     //                     const Eigen::Vector3d& xd_ref_tplusone,
-    //     //                     const Eigen::VectorXd& /*qddot_suggestion*/, // unused in source too
-    //     //                     Eigen::Vector3d ro,
-    //     //                     const Eigen::Vector3d& vo,
-    //     //                     double delta,
-    //     //                     const Eigen::VectorXd& q_des,
-    //     //                     const Eigen::VectorXd& /*qd_des*/, // unused in source too
-    //     //                     double Qv)
-    // }
-
     std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q);
 
-    if (dist) {
-        std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
-    }
+    if (!dist) return 1;
+    else std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
 
     std::vector<nlohmann::json> payload;
     payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
     payload.push_back(q_vec);
     payload.push_back(std::vector<int>{});
-    dts.send_skeleton_data(payload);
+    transmitters[1]->send_data(payload);
     
     return 0;
 };
@@ -163,8 +137,14 @@ std::optional<std::vector<std::array<double, 7>>> load_trajectory(int n_traj, st
 // Execute task
 // ─────────────────────────────────────────────────────────────────────────────
 int execute_task (int n_traj, std::string c_dir="") {
-    DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
-    DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
+    // DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
+    // DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
+    std::vector<std::unique_ptr<DataTransmitter>> transmitters;
+    transmitters.reserve(3);
+    transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Receiver, 10, "MERGED"));
+    transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Sender, 12, "ROBOT"));
+    transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Sender, 13, "DISTANCE"));
+
 
     auto traj = load_trajectory(n_traj, c_dir);
     if (!traj) return 1;
@@ -182,7 +162,7 @@ int execute_task (int n_traj, std::string c_dir="") {
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
         if (elapsed_ms < traj->size()) {
             std::vector<double> q((*traj)[elapsed_ms].begin(), (*traj)[elapsed_ms].end());
-            task_engine(dtr, dts, robot, q);
+            task_engine(transmitters, robot, q);
         }
         else {
             loop_start = std::chrono::steady_clock::now();
@@ -192,8 +172,9 @@ int execute_task (int n_traj, std::string c_dir="") {
         std::this_thread::sleep_until(next_time);
     }
 
-    dtr.shutdown();
-    dts.shutdown();
+    for (auto &transmitter : transmitters) {
+        transmitter->shutdown();
+    }
 
     return 0;
 }

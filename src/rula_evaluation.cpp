@@ -110,16 +110,13 @@ int main() {
     while (true) {
         if (true) {
             auto start = std::chrono::steady_clock::now();
-            auto skeleton = json_to_keypoints(dtr.receive_skeleton_data()[0]);
+            auto skeleton = json_to_keypoints(dtr.receive_data()[0]);
             
             RULAResult result_R = computeRULA(skeleton, flags, 'R', false);
             RULAResult result_L = computeRULA(skeleton, flags, 'L', false);
 
             std::array<int, 2> rula_score = {result_R.grandScore, result_L.grandScore};
             dts.send_rula_score(rula_score);
-            // auto score = dtr_rula.receive_rula_score();
-
-            // std::cout << "SCORE: " << score[0] << ", " << score[1] << "\r";
         }
 
         auto t1 = std::chrono::steady_clock::now();

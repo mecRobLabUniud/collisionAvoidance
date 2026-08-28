@@ -149,7 +149,7 @@ class DataTransmitter:
             self.setup_zmq_sender()
             self.setup_shm_sender()
             self.send_frames = self._send_frames
-            self.send_skeleton_data = self._send_skeleton_data
+            self.send_data = self._send_data
             self.send_rula_score = self._send_rula_score
         elif self.mode == "receiver":
             self.setup_zmq_receiver()
@@ -157,7 +157,7 @@ class DataTransmitter:
             self.receive_raw_frames = self._receive_raw_frames
             self.receive_packed_msg = self._receive_packed_msg
             self.receive_frames = self._receive_frames
-            self.receive_skeleton_data = self._receive_skeleton_data
+            self.receive_data = self._receive_data
             self.receive_rula_score = self._receive_rula_score
         else:
             raise ValueError(f"Unknown argument: {self.mode}")
@@ -218,7 +218,7 @@ class DataTransmitter:
         buf[:] = frame[:]
 
     @requires("sender")
-    def _send_skeleton_data(self, *array: np.ndarray):
+    def _send_data(self, *array: np.ndarray):
         msg = f"{self.topic}_{self.device_id}"
         for elem in array:
             msg += f"; {json.dumps(elem.tolist())}"
@@ -244,7 +244,7 @@ class DataTransmitter:
         return self.cv2_to_b64(self.receive_raw_frames())
 
     @requires("receiver")
-    def _receive_skeleton_data(self):
+    def _receive_data(self):
         packed = self.receive_packed_msg()
         _, *packed_data = packed.split("; ")
         return [json.loads(packed) for packed in packed_data]

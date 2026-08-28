@@ -68,19 +68,19 @@ def rula_thread():
 # Skeleton thread 
 # ─────────────────────────────────────────────────────────────────────────────
 @set_rate(60)
-def send_skeleton_data():
+def send_data():
     global cnt, state
     try:
-        merged_skeleton = dtrs[-1].receive_skeleton_data()[0]
+        merged_skeleton = dtrs[-1].receive_data()[0]
         
         x = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in merged_skeleton]
         y = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in merged_skeleton]
         z = [pnt[2] if not np.isnan(pnt[2]) else None for pnt in merged_skeleton]
 
         if use_robot:
-            robot_p = dtrs[-3].receive_skeleton_data()[0]
-            robot_q = dtrs[-3].receive_skeleton_data()[1]
-            caps_radius = dtrs[-3].receive_skeleton_data()[2]
+            robot_p = dtrs[-3].receive_data()[0]
+            robot_q = dtrs[-3].receive_data()[1]
+            caps_radius = dtrs[-3].receive_data()[2]
 
             x_robot = [pnt[0] if not np.isnan(pnt[0]) else None for pnt in robot_p]
             y_robot = [pnt[1] if not np.isnan(pnt[1]) else None for pnt in robot_p]
@@ -99,7 +99,7 @@ def send_skeleton_data():
 
 def skeleton_thread():
     while True:
-        send_skeleton_data()
+        send_data()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

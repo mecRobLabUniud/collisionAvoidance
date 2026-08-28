@@ -183,6 +183,9 @@ public:
         }
     }
 
+    DataTransmitter(DataTransmitter&&) noexcept = default;
+    DataTransmitter& operator=(DataTransmitter&&) noexcept = default;
+
     ~DataTransmitter() {
         try {
             shutdown();
@@ -204,7 +207,7 @@ public:
         std::memcpy(shm_->buf(), frame.data, n);
     }
 
-    void send_skeleton_data(const std::vector<nlohmann::json>& arrays) {
+    void send_data(const std::vector<nlohmann::json>& arrays) {
         std::string msg = topic_ + "_" + std::to_string(device_id_);
         for (const auto& elem : arrays) {
             msg += "; " + elem.dump();
@@ -245,7 +248,7 @@ public:
         return cv2_to_b64(receive_raw_frame());
     }
 
-    std::vector<nlohmann::json> receive_skeleton_data() {
+    std::vector<nlohmann::json> receive_data() {
         std::string packed = receive_packed_msg();
 
         std::vector<std::string> parts;

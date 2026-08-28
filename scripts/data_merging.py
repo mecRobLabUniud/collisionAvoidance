@@ -74,7 +74,7 @@ def merging(dtrs, dts):
     skeletons = []
     confidences = []
     for dtr in dtrs:
-        skeleton, confidence = dtr.receive_skeleton_data()
+        skeleton, confidence = dtr.receive_data()
         # print(confidence)
         if skeleton is None or confidence is None or confidence is None:
             skeletons.append(None)
@@ -94,7 +94,7 @@ def merging(dtrs, dts):
     reshaped_skeleton = reshape_structure(merged_skeleton)    
     merged_confidence = np.ones(skel_len).astype(np.float32)
 
-    dts.send_skeleton_data(reshaped_skeleton, merged_confidence)
+    dts.send_data(reshaped_skeleton, merged_confidence)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ def main():
     dts = DataTransmitter("sender", 10, "MERGED")
     print("Merging started correctly\n")
 
-    skeleton, _ = dtrs[0].receive_skeleton_data()
+    skeleton, _ = dtrs[0].receive_data()
     skel_len = len(skeleton)
     kfs = [KalmanFilter6D() for _ in range(skel_len)]
 
