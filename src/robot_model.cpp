@@ -9,6 +9,38 @@
 #include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/spatial/explog.hpp>
 
+
+/*
+    const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
+
+    RobotModel robot(urdf_path);
+
+    Eigen::VectorXd q(7);
+    q << 0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785;  // Panda "ready" pose
+    
+    ee_pose = robot.GetJointPose("panda_link8", q);
+    std::cout << "EE position: " << ee_pose.translation().transpose()
+                << std::endl; 
+
+
+    // Jacobian at same q
+    Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q);
+    std::cout << "Jacobian (6x7):\n" << J << std::endl;
+
+    // Inverse kinematics: try to reach a slightly perturbed target
+    Eigen::Isometry3d target = ee_pose;
+    target.translation().z() += 0.05;
+
+    Eigen::VectorXd q_solution;
+    bool ok = robot.ComputeIK("panda_link8", target, q, &q_solution);
+    if (ok) {
+        std::cout << "IK solution: " << q_solution.transpose() << std::endl;
+    } else {
+        std::cout << "IK did not converge" << std::endl;
+    }
+*/
+
+
 RobotModel::RobotModel(const std::string& urdf_path) {
   pinocchio::urdf::buildModel(urdf_path, model_);
   data_ = pinocchio::Data(model_);

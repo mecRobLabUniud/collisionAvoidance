@@ -142,7 +142,13 @@ double rms(const std::vector<double>& values) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SSM + PFL + Escape Trajectories strategy
 // ─────────────────────────────────────────────────────────────────────────────
-int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eigen::VectorXd qdd) {
+int SSM_PFL_escape(RobotModel& robot, 
+        const Eigen::VectorXd q_r, 
+        const Eigen::VectorXd qd_r, 
+        const Eigen::VectorXd qdd_r,
+        const Eigen::VectorXd p_h, 
+        const Eigen::VectorXd pd_h, 
+        const Eigen::VectorXd pdd_h) {
     std::cout << "=== Appendix B: PFL & SSM & Escape Trajectories ===" << std::endl;
     
     // Initialize parameters and utilities
@@ -187,111 +193,26 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
     // =========================================================================
     for (int w1 = 0; w1 < params.number_trajectories; ++w1) {
         
-        // Compute joint acceleration RMS for nominal trajectory
-        // double qdd_rms_nominal = rms(qdd.row(0).head(number_time_points));
-        
-
-
-
-    
-
-        // ---------------------------------------------------------------------
-        // Analysis of the trajectory in cartesian space
-        // ---------------------------------------------------------------------
-        // std::vector<Vector3> p_path(number_time_points_complete, Vector3::Zero());
-        // std::vector<Vector3> v_path(number_time_points_complete, Vector3::Zero());
-        // std::vector<double> v_module;
-        // std::vector<int> stopping_times;
-        // 
-        // for (int i = 0; i < number_time_points; ++i) {
-        //     // Compute Cartesian velocity from Jacobian
-        //     Matrix66 J = geometricJacobian(robot, q.col(i));
-        //     Vector6 v_full = J * qd.col(i);
-        //     v_path[i] = v_full.tail<3>();  // Linear velocity (last 3 elements)
-        //     v_module.push_back(v_path[i].norm());
-        //     
-        //     // Forward kinematics for position
-        //     Transform4 transform = getTransform(robot, q.col(i));
-        //     p_path[i] = transform.col(3).head<3>();
-        //     
-        //     // Check if reached goal position (within 5mm)
-        //     if ((p_path[i] - p_rf).norm() <= 0.005) {
-        //         stopping_times.push_back(i);
-        //     }
-        // }
 
         std::cout << "HERE" << std::endl;
 
-        Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q);
+        Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q_r);
         std::cout << "Jacobian (6x7):\n" << J << std::endl;
 
-        Eigen::VectorXd v = J * qd;
-        Eigen::Vector3d v_path = v.tail<3>(); 
-        Eigen::Vector3d p_path = robot.GetJointPose("panda_link8", q).translation().transpose();
+        Eigen::VectorXd v = J * qd_r;
+        Eigen::Vector3d pd_r = v.tail<3>(); 
+        Eigen::Vector3d p_r = robot.GetJointPose("panda_link8", q_r).translation().transpose();
 
-        std::cout << "EE position: " << p_path << std::endl;
-        std::cout << "EE velocity: " << v_path << std::endl;
+        std::cout << "EE position: " << p_r << std::endl;
+        std::cout << "EE velocity: " << pd_r << std::endl;
+
+
+        std::cout << "HUman position: " << p_h << std::endl;
+        std::cout << "HUman velocity: " << pd_h << std::endl;
+        std::cout << "HUman acceleration: " << pdd_h << std::endl;
 
                    }
     /* 
-        
-        // Store original arrival time
-        int min_stopping_idx = stopping_times.empty() ? number_time_points : stopping_times[0];
-        double T_TIME_ORIGINAL_val = min_stopping_idx * dt;
-        
-        // Extend trajectory to hold final position
-        for (int i = number_time_points; i < number_time_points_complete; ++i) {
-            p_path[i] = p_path[number_time_points - 1];
-            v_path[i] = Vector3::Zero();
-        }
-        
-        // Nominal velocity RMS
-        double v_rms_nominal = rms(v_module);
-        
-        std::cout << "Nominal arrival time: " << T_TIME_ORIGINAL_val << "s" << std::endl;
-        std::cout << "Nominal velocity RMS: " << v_rms_nominal << " m/s" << std::endl;
-
-
-     
-
-    
-        // =====================================================================
-        // LOOP w2: Intrusions
-        // =====================================================================
-        for (int w2 = 0; w2 < params.number_intrusions_per_trajectory; ++w2) {
-            std::cout << "\n  Intrusion " << (w2 + 1) << "/" << params.number_intrusions_per_trajectory << std::endl;
-            
-            // Generate randomized human trajectory
-            double r1 = rng.rand01();
-            double r2 = rng.rand01();
-            
-            Vector3 p_hi;
-            p_hi(0) = 0.65 - (r1 * params.b_human - params.b_human / 2.0) * sin(M_PI / 4.0) 
-                         + (r2 * params.h_human - params.h_human / 2.0) * cos(M_PI / 4.0);
-            p_hi(1) = 0.65 + (r1 * params.b_human - params.b_human / 2.0) * cos(M_PI / 4.0) 
-                         + (r2 * params.h_human - params.h_human / 2.0) * cos(M_PI / 4.0);
-            p_hi(2) = rng.randRange(params.z_min_human, params.z_max_human);
-            
-            r1 = rng.rand01();
-            r2 = rng.rand01();
-            
-            Vector3 p_hf;
-            p_hf(0) = 0.65 - (r1 * params.b_human - params.b_human / 2.0) * sin(M_PI / 4.0) 
-                         + (r2 * params.h_human - params.h_human / 2.0) * cos(M_PI / 4.0);
-            p_hf(1) = 0.65 + (r1 * params.b_human - params.b_human / 2.0) * cos(M_PI / 4.0) 
-                         + (r2 * params.h_human - params.h_human / 2.0) * cos(M_PI / 4.0);
-            p_hf(2) = rng.randRange(params.z_min_human, params.z_max_human);
-            
-            double time_collision = rng.randRange(params.time_collision_min, params.time_collision_max);
-            
-            // Collision position on nominal trajectory
-            int collision_step = static_cast<int>(time_collision * params.computational_frequency);
-            collision_step = std::min(collision_step, number_time_points - 1);
-            Vector3 collision_position = p_path[collision_step];
-            
-            // Intrusion trajectory (simplified: constant position for this example)
-            Vector3 p_intrusion = p_hi;
-            Vector3 pd_intrusion = Vector3::Zero();  // Velocity of intrusion
             
             // =================================================================
             // LOOP w4: PFL Velocities (outer loop)
@@ -309,8 +230,8 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
                     Vector6 qddot_real = Vector6::Zero();
                     Vector6 qdot_real = traj.qd.col(0);
                     Vector6 q_real = traj.q.col(0);
-                    Vector3 p_real = p_path[0];
-                    Vector3 v_real = v_path[0];
+                    Vector3 p_real = p_r[0];
+                    Vector3 v_real = pd_r[0];
                     
                     std::vector<double> v_real_module;
                     std::vector<Vector6> qddot_real_history;
@@ -325,7 +246,7 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
                     for (int i = 0; i < number_time_points_complete - 1; ++i) {
                         if (!collision) {
                             // Compute safety distance delta
-                            double delta_safety = 0.1 + pd_intrusion.norm() * params.stopping_time;
+                            double delta_safety = 0.1 + pd_h.norm() * params.stopping_time;
                             
                             // PFL velocity scaling term (from MATLAB code)
                             double velocity_term = -( -(delta_safety / params.stopping_time) + velocity_PFL ) * params.stopping_time;
@@ -338,11 +259,11 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
                                 params.stopping_time,
                                 q_real,
                                 qdot_real,
-                                p_path[reference_time + 1],
-                                v_path[reference_time + 1],
+                                p_r[reference_time + 1],
+                                pd_r[reference_time + 1],
                                 qddot_real,
-                                p_intrusion,
-                                pd_intrusion,
+                                p_h,
+                                pd_h,
                                 delta_safety,
                                 traj.q.col(reference_time + 1),
                                 traj.qd.col(reference_time + 1),
@@ -366,7 +287,7 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
                             // Check if optimization succeeded
                             if (res.flag == 1) {
                                 // Check collision with human (distance <= 0.1m)
-                                if ((p_real - p_intrusion).norm() <= 0.1) {
+                                if ((p_real - p_h).norm() <= 0.1) {
                                     R_STOP[w1][w2][w3][w4] += 1.0;
                                     collision = true;
                                     collision_counter = 0;
@@ -509,19 +430,23 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eig
 // ─────────────────────────────────────────────────────────────────────────────
 int task_engine(
         std::vector<std::unique_ptr<DataTransmitter>>& transmitters, 
-        RobotModel robot, 
-        Eigen::VectorXd q,
-        Eigen::VectorXd qd,
-        Eigen::VectorXd qdd) {
+        RobotModel robot,
+        int elapsed_ms, 
+        const Eigen::VectorXd q_r, 
+        const Eigen::VectorXd qd_r, 
+        const Eigen::VectorXd qdd_r,
+        Eigen::VectorXd& p_h, 
+        Eigen::VectorXd& pd_h, 
+        Eigen::VectorXd& pdd_h) {
     std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(transmitters[0]->receive_data()[0]);
-    std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q);
+    std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q_r);
 
     if (!dist) return 1;
     else std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
 
     std::vector<nlohmann::json> payload;
     payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
-    payload.push_back(q);
+    payload.push_back(q_r);
     payload.push_back(std::vector<int>{});
     transmitters[1]->send_data(payload);
 
@@ -530,7 +455,14 @@ int task_engine(
     payload.push_back(dist->c_r);
     transmitters[2]->send_data(payload);
 
-    SSM_PFL_escape(robot, q, qd, qdd);
+    double loop_duration = 0.001 * static_cast<double>(elapsed_ms);
+    Eigen::VectorXd p_h_prev = p_h;
+    Eigen::VectorXd pd_h_prev = pd_h;
+    p_h = dist->c_h;
+    pd_h = (p_h - p_h_prev)/loop_duration;
+    pdd_h = (pd_h - pd_h_prev)/loop_duration;
+
+    SSM_PFL_escape(robot, q_r, qd_r, qdd_r, p_h, pd_h, pdd_h);
     
     return 0;
 };
@@ -561,104 +493,45 @@ std::optional<Trajectory> load_trajectory(int n_traj, std::string c_dir) {
 }
 
 
-
-
-
-
-/*
-    const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
-
-    RobotModel robot(urdf_path);
-
-    Eigen::VectorXd q(7);
-    q << 0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785;  // Panda "ready" pose
-
-    // Forward kinematics + pose lookup
-    Eigen::Isometry3d ee_pose = robot.GetJointPose("panda_link0", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link1", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link2", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link3", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;      
-    ee_pose = robot.GetJointPose("panda_link4", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link5", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link6", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;
-    ee_pose = robot.GetJointPose("panda_link7", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl;     
-    ee_pose = robot.GetJointPose("panda_link8", q);
-    std::cout << "EE position: " << ee_pose.translation().transpose()
-                << std::endl; 
-
-
-    // Jacobian at same q
-    Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q);
-    std::cout << "Jacobian (6x7):\n" << J << std::endl;
-
-    // Inverse kinematics: try to reach a slightly perturbed target
-    Eigen::Isometry3d target = ee_pose;
-    target.translation().z() += 0.05;
-
-    Eigen::VectorXd q_solution;
-    bool ok = robot.ComputeIK("panda_link8", target, q, &q_solution);
-    if (ok) {
-        std::cout << "IK solution: " << q_solution.transpose() << std::endl;
-    } else {
-        std::cout << "IK did not converge" << std::endl;
-    }
-*/
-
-
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Execute task
 // ─────────────────────────────────────────────────────────────────────────────
 int execute_task (int n_traj, std::string c_dir="") {
-    // DataTransmitter dtr = DataTransmitter(DataTransmitter::Mode::Receiver, 10, "MERGED");
-    // DataTransmitter dts = DataTransmitter(DataTransmitter::Mode::Sender, 12, "ROBOT");
     std::vector<std::unique_ptr<DataTransmitter>> transmitters;
     transmitters.reserve(3);
     transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Receiver, 10, "MERGED"));
     transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Sender, 12, "ROBOT"));
     transmitters.push_back(std::make_unique<DataTransmitter>(DataTransmitter::Mode::Sender, 13, "DISTANCE"));
 
-
     auto traj = load_trajectory(n_traj, c_dir);
     if (!traj) return 1;
+
+    const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
+    RobotModel robot(urdf_path);
+
+    // ── Definition of human collision point ──────────────────────────────────────
+    Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>((*traj).q[0].data(), (*traj).q[0].size()));
+    std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(transmitters[0]->receive_data()[0]);
+    std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q);
+    Eigen::VectorXd p_h = dist->c_h;
+    Eigen::VectorXd pd_h = Eigen::VectorXd::Zero(3);
+    Eigen::VectorXd pdd_h = Eigen::VectorXd::Zero(3);
 
     const double rate_hz = 16.0;
     const auto period = std::chrono::duration<double>(1.0 / rate_hz);
     auto next_time = std::chrono::steady_clock::now();
     auto loop_start = std::chrono::steady_clock::now();
-    const std::string urdf_path = c_dir + "/src/urdf/panda.urdf";
-    RobotModel robot(urdf_path);
-
+    
     // ── Task engine ──────────────────────────────────────────────────────────────
     while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
         if (elapsed_ms < traj->q.size()) {
-            // std::vector<double> q((*traj).q[elapsed_ms].begin(), (*traj).q[elapsed_ms].end());
-            // std::vector<double> qd((*traj).qd[elapsed_ms].begin(), (*traj).qd[elapsed_ms].end());
-            // std::vector<double> qdd((*traj).qdd[elapsed_ms].begin(), (*traj).qdd[elapsed_ms].end());
-            Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>((*traj).q[elapsed_ms].data(), (*traj).q[elapsed_ms].size()));
-            Eigen::VectorXd qd(Eigen::Map<Eigen::VectorXd>((*traj).qd[elapsed_ms].data(), (*traj).qd[elapsed_ms].size()));
-            Eigen::VectorXd qdd(Eigen::Map<Eigen::VectorXd>((*traj).qdd[elapsed_ms].data(), (*traj).qdd[elapsed_ms].size()));
+            Eigen::VectorXd q_r(Eigen::Map<Eigen::VectorXd>((*traj).q[elapsed_ms].data(), (*traj).q[elapsed_ms].size()));
+            Eigen::VectorXd qd_r(Eigen::Map<Eigen::VectorXd>((*traj).qd[elapsed_ms].data(), (*traj).qd[elapsed_ms].size()));
+            Eigen::VectorXd qdd_r(Eigen::Map<Eigen::VectorXd>((*traj).qdd[elapsed_ms].data(), (*traj).qdd[elapsed_ms].size()));
             
-            task_engine(transmitters, robot, q, qd, qdd);
+            task_engine(transmitters, robot, elapsed_ms, q_r, qd_r, qdd_r, p_h, pd_h, pdd_h);
         }
         else {
             loop_start = std::chrono::steady_clock::now();
