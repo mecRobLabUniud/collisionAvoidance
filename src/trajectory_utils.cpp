@@ -184,6 +184,9 @@ void quintic_spline_interp_full(const Eigen::VectorXd& t_low,
     Eigen::VectorXd v_low = estimate_velocities(t_low, q_low);
     Eigen::VectorXd a_low = estimate_accelerations(t_low, q_low);
 
+    std::cout << "========== v Low ==========\n" << v_low.transpose() << "\n";
+    std::cout << "========== a Low ==========\n" << v_low.transpose() << "\n";
+
     q_high.resize(m);
     v_high.resize(m);
     a_high.resize(m);
@@ -207,7 +210,7 @@ void quintic_spline_interp_full(const Eigen::VectorXd& t_low,
 
 
 // ── Main interpolation entry point ──────────────────────────────────────────
-InterpolatedTrajectory interpolate_to_1kHz_full(
+Trajectory interpolate_to_1kHz_full(
         const std::vector<std::array<double, 7>>& traj_low,
         std::vector<double> time_low) {
 
@@ -219,7 +222,7 @@ InterpolatedTrajectory interpolate_to_1kHz_full(
     for (int i = 0; i < n;      ++i) t_low(i)  = time_low[i];
     for (int i = 0; i < n_high; ++i) t_high(i) = i / 1000.0;
 
-    InterpolatedTrajectory out;
+    Trajectory out;
     out.q.resize(n_high);
     out.qd.resize(n_high);
     out.qdd.resize(n_high);

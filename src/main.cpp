@@ -8,6 +8,7 @@
 #include <vector>
 #include <optional>
 #include <charconv>
+#include <cmath>
 
 #include "trajectory_utils.hpp"
 #include "data_transmitter.hpp"
@@ -124,12 +125,24 @@ struct ExperimentParams {
 };
 
 
+double rms(const std::vector<double>& values) {
+    if (values.empty()) return 0.0;
+    
+    double sum_squares = 0.0;
+    for (double v : values) {
+        sum_squares += v * v;
+    }
+    
+    return std::sqrt(sum_squares / values.size());
+}
+
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SSM + PFL + Escape Trajectories strategy
 // ─────────────────────────────────────────────────────────────────────────────
-int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q) {
+int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q, Eigen::VectorXd qd, Eigen::VectorXd qdd) {
     std::cout << "=== Appendix B: PFL & SSM & Escape Trajectories ===" << std::endl;
     
     // Initialize parameters and utilities
@@ -164,103 +177,63 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q) {
 
     
     // Base configuration (MATLAB: q_base = [0,1,1,pi,pi,0]') //0.000000, -0.785398, 0.000000, -2.356194, 0.000000, 1.570796, 0.785398
-    Eigen::VectorXd q_base;
-    q_base << 0.000000, -0.785398, 0.000000, -2.356194, 0.000000, 1.570796, 0.785398;
+    // Eigen::VectorXd q_base{0.000000, -0.785398, 0.000000, -2.356194, 0.000000, 1.570796, 0.785398};
     
     std::cout << "\nStarting experiment loops..." << std::endl;
     
-    /*
+    
     // =========================================================================
     // LOOP w1: Trajectories
     // =========================================================================
     for (int w1 = 0; w1 < params.number_trajectories; ++w1) {
-        std::cout << "\n--- Trajectory " << (w1 + 1) << "/" << params.number_trajectories << " ---" << std::endl;
-        
-        // ---------------------------------------------------------------------
-        // Robot trajectory generation
-        // ---------------------------------------------------------------------
-        Vector3 p_ri = rng.randVector3(
-            params.x_min_robot_initial, params.x_max_robot_initial,
-            params.y_min_robot_initial, params.y_max_robot_initial,
-            params.z_min_robot_initial, params.z_max_robot_initial
-        );
-        
-        Vector3 p_rf = rng.randVector3(
-            params.x_min_robot_final, params.x_max_robot_final,
-            params.y_min_robot_final, params.y_max_robot_final,
-            params.z_min_robot_final, params.z_max_robot_final
-        );
-        
-        std::cout << "Initial position: (" << p_ri.transpose() << ")" << std::endl;
-        std::cout << "Final position: (" << p_rf.transpose() << ")" << std::endl;
-        
-        // Build homogeneous transforms p1, p2
-        Transform4 p1 = Transform4::Identity();
-        Transform4 p2 = Transform4::Identity();
-        
-        p1.block<3,3>(0,0) << 1, 0, 0,
-                              0, -1, 0,
-                              0, 0, -1;
-        p1.col(3).head<3>() = p_ri;
-        
-        p2.block<3,3>(0,0) << 1, 0, 0,
-                              0, -1, 0,
-                              0, 0, -1;
-        p2.col(3).head<3>() = p_rf;
-        
-        // Inverse kinematics
-        IKResult ik1 = inverseKinematics(robot, p1, q_base);
-        IKResult ik2 = inverseKinematics(robot, p2, q_base);
-        
-        if (!ik1.success || !ik2.success) {
-            std::cerr << "IK failed for trajectory " << (w1 + 1) << std::endl;
-            continue;
-        }
-        
-        // Build waypoints matrix [6 dof × 2 waypoints]
-        Eigen::MatrixXd waypoints(6, 2);
-        waypoints.col(0) = ik1.q;
-        waypoints.col(1) = ik2.q;
-        
-        // Time vectors for trajectory generation
-        Eigen::VectorXd t_waypoints(2);
-        t_waypoints << t_begin, t_final;
-        
-        Eigen::VectorXd t_eval(number_time_points_complete);
-        for (int i = 0; i < number_time_points_complete; ++i) {
-            t_eval(i) = time_points_complete[i];
-        }
-        
-        // Generate quintic polynomial trajectory
-        auto traj = quinticPolyTraj(waypoints, t_waypoints, t_eval);
         
         // Compute joint acceleration RMS for nominal trajectory
-        double qdd_rms_nominal = math::rms(traj.qdd.row(0).head(number_time_points));
+        // double qdd_rms_nominal = rms(qdd.row(0).head(number_time_points));
         
+
+
+
+    
+
         // ---------------------------------------------------------------------
         // Analysis of the trajectory in cartesian space
         // ---------------------------------------------------------------------
-        std::vector<Vector3> p_path(number_time_points_complete, Vector3::Zero());
-        std::vector<Vector3> v_path(number_time_points_complete, Vector3::Zero());
-        std::vector<double> v_module;
-        std::vector<int> stopping_times;
-        
-        for (int i = 0; i < number_time_points; ++i) {
-            // Compute Cartesian velocity from Jacobian
-            Matrix66 J = geometricJacobian(robot, traj.q.col(i));
-            Vector6 v_full = J * traj.qd.col(i);
-            v_path[i] = v_full.tail<3>();  // Linear velocity (last 3 elements)
-            v_module.push_back(v_path[i].norm());
-            
-            // Forward kinematics for position
-            Transform4 transform = getTransform(robot, traj.q.col(i));
-            p_path[i] = transform.col(3).head<3>();
-            
-            // Check if reached goal position (within 5mm)
-            if ((p_path[i] - p_rf).norm() <= 0.005) {
-                stopping_times.push_back(i);
-            }
-        }
+        // std::vector<Vector3> p_path(number_time_points_complete, Vector3::Zero());
+        // std::vector<Vector3> v_path(number_time_points_complete, Vector3::Zero());
+        // std::vector<double> v_module;
+        // std::vector<int> stopping_times;
+        // 
+        // for (int i = 0; i < number_time_points; ++i) {
+        //     // Compute Cartesian velocity from Jacobian
+        //     Matrix66 J = geometricJacobian(robot, q.col(i));
+        //     Vector6 v_full = J * qd.col(i);
+        //     v_path[i] = v_full.tail<3>();  // Linear velocity (last 3 elements)
+        //     v_module.push_back(v_path[i].norm());
+        //     
+        //     // Forward kinematics for position
+        //     Transform4 transform = getTransform(robot, q.col(i));
+        //     p_path[i] = transform.col(3).head<3>();
+        //     
+        //     // Check if reached goal position (within 5mm)
+        //     if ((p_path[i] - p_rf).norm() <= 0.005) {
+        //         stopping_times.push_back(i);
+        //     }
+        // }
+
+        std::cout << "HERE" << std::endl;
+
+        Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q);
+        std::cout << "Jacobian (6x7):\n" << J << std::endl;
+
+        Eigen::VectorXd v = J * qd;
+        Eigen::Vector3d v_path = v.tail<3>(); 
+        Eigen::Vector3d p_path = robot.GetJointPose("panda_link8", q).translation().transpose();
+
+        std::cout << "EE position: " << p_path << std::endl;
+        std::cout << "EE velocity: " << v_path << std::endl;
+
+                   }
+    /* 
         
         // Store original arrival time
         int min_stopping_idx = stopping_times.empty() ? number_time_points : stopping_times[0];
@@ -273,11 +246,15 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q) {
         }
         
         // Nominal velocity RMS
-        double v_rms_nominal = math::rms(v_module);
+        double v_rms_nominal = rms(v_module);
         
         std::cout << "Nominal arrival time: " << T_TIME_ORIGINAL_val << "s" << std::endl;
         std::cout << "Nominal velocity RMS: " << v_rms_nominal << " m/s" << std::endl;
-        
+
+
+     
+
+    
         // =====================================================================
         // LOOP w2: Intrusions
         // =====================================================================
@@ -530,9 +507,13 @@ int SSM_PFL_escape(RobotModel& robot, Eigen::VectorXd q) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main loop implementing chosen strategy
 // ─────────────────────────────────────────────────────────────────────────────
-int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, RobotModel robot, std::vector<double> q_vec) {
+int task_engine(
+        std::vector<std::unique_ptr<DataTransmitter>>& transmitters, 
+        RobotModel robot, 
+        Eigen::VectorXd q,
+        Eigen::VectorXd qd,
+        Eigen::VectorXd qdd) {
     std::vector<Eigen::Vector3d> skeleton = json_to_keypoints(transmitters[0]->receive_data()[0]);
-    Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>(q_vec.data(), q_vec.size()));
     std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q);
 
     if (!dist) return 1;
@@ -540,7 +521,7 @@ int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, Rob
 
     std::vector<nlohmann::json> payload;
     payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});
-    payload.push_back(q_vec);
+    payload.push_back(q);
     payload.push_back(std::vector<int>{});
     transmitters[1]->send_data(payload);
 
@@ -549,7 +530,7 @@ int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, Rob
     payload.push_back(dist->c_r);
     transmitters[2]->send_data(payload);
 
-    // SSM_PFL_escape(robot, q);
+    SSM_PFL_escape(robot, q, qd, qdd);
     
     return 0;
 };
@@ -558,7 +539,7 @@ int task_engine(std::vector<std::unique_ptr<DataTransmitter>>& transmitters, Rob
 // ─────────────────────────────────────────────────────────────────────────────
 // Load trajectory
 // ─────────────────────────────────────────────────────────────────────────────
-std::optional<std::vector<std::array<double, 7>>> load_trajectory(int n_traj, std::string c_dir) {
+std::optional<Trajectory> load_trajectory(int n_traj, std::string c_dir) {
     std::string trajectory_path = c_dir + "src/trajectories/test" + std::to_string(n_traj) + "/";
     std::ifstream f(trajectory_path);
     try {
@@ -571,12 +552,12 @@ std::optional<std::vector<std::array<double, 7>>> load_trajectory(int n_traj, st
 
     std::vector<std::array<double, 7>> traj_low = load_trajectory_CSV(trajectory_path + "q_ref.csv");
     std::vector<double> t_low = load_timestamps_CSV(trajectory_path + "t_ref.csv");
-    InterpolatedTrajectory traj_high = interpolate_to_1kHz_full(traj_low, t_low);
+    Trajectory traj_high = interpolate_to_1kHz_full(traj_low, t_low);
     save_trajectory_CSV(trajectory_path + "q.csv",  traj_high.q);
     save_trajectory_CSV(trajectory_path + "qd.csv",  traj_high.qd);
     save_trajectory_CSV(trajectory_path + "qdd.csv",  traj_high.qdd);
 
-    return traj_high.q;
+    return traj_high;
 }
 
 
@@ -669,9 +650,15 @@ int execute_task (int n_traj, std::string c_dir="") {
     while (running) {
         auto elapsed = std::chrono::steady_clock::now() - loop_start;
         int elapsed_ms = static_cast<int>(std::round(std::chrono::duration<double>(elapsed).count() * 1000));
-        if (elapsed_ms < traj->size()) {
-            std::vector<double> q((*traj)[elapsed_ms].begin(), (*traj)[elapsed_ms].end());
-            task_engine(transmitters, robot, q);
+        if (elapsed_ms < traj->q.size()) {
+            // std::vector<double> q((*traj).q[elapsed_ms].begin(), (*traj).q[elapsed_ms].end());
+            // std::vector<double> qd((*traj).qd[elapsed_ms].begin(), (*traj).qd[elapsed_ms].end());
+            // std::vector<double> qdd((*traj).qdd[elapsed_ms].begin(), (*traj).qdd[elapsed_ms].end());
+            Eigen::VectorXd q(Eigen::Map<Eigen::VectorXd>((*traj).q[elapsed_ms].data(), (*traj).q[elapsed_ms].size()));
+            Eigen::VectorXd qd(Eigen::Map<Eigen::VectorXd>((*traj).qd[elapsed_ms].data(), (*traj).qd[elapsed_ms].size()));
+            Eigen::VectorXd qdd(Eigen::Map<Eigen::VectorXd>((*traj).qdd[elapsed_ms].data(), (*traj).qdd[elapsed_ms].size()));
+            
+            task_engine(transmitters, robot, q, qd, qdd);
         }
         else {
             loop_start = std::chrono::steady_clock::now();

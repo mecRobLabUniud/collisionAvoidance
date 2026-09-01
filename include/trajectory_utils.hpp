@@ -91,14 +91,14 @@ void quintic_spline_interp_full(const Eigen::VectorXd& t_low,
                                  Eigen::VectorXd& a_high);
 
 
-// ── Main interpolation entry point (100Hz -> 1kHz upsampling) ──────────────
-struct InterpolatedTrajectory {
-    std::vector<std::array<double, 7>> q;  // position
-    std::vector<std::array<double, 7>> qd;  // velocity
-    std::vector<std::array<double, 7>> qdd;  // acceleration
+// ── Main interpolation entry point ─────────────────────────────────────────
+struct Trajectory {
+    std::vector<std::array<double, 7>> q;       // position
+    std::vector<std::array<double, 7>> qd;      // velocity
+    std::vector<std::array<double, 7>> qdd;     // acceleration
 };
 
-InterpolatedTrajectory interpolate_to_1kHz_full(
+Trajectory interpolate_to_1kHz_full(
         const std::vector<std::array<double, 7>>& traj_low,
         std::vector<double> time_low);
 
