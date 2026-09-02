@@ -80,7 +80,7 @@ Eigen::Isometry3d RobotModel::GetJointPose(
 }
 
 Eigen::MatrixXd RobotModel::ComputeJacobian(const std::string& frame_name,
-                                             const Eigen::VectorXd& q) {
+                                             const Eigen::VectorXd& q) const {
   if (q.size() != model_.nq) {
     throw std::runtime_error("Joint vector size does not match model DOF");
   }
@@ -94,6 +94,18 @@ Eigen::MatrixXd RobotModel::ComputeJacobian(const std::string& frame_name,
   pinocchio::computeFrameJacobian(
       model_, data_, q, frame_id, pinocchio::LOCAL_WORLD_ALIGNED, J);
   return J;
+}
+
+Eigen::MatrixXd RobotModel::ComputeDerivativeJacobian(const std::string& frame_name,
+                                             const Eigen::VectorXd& q) const {
+    constexpr double eps = 0.0000001;
+
+    Eigen::MatrixXd J = ComputeJacobian(frame_name, q);
+
+    Eigen::VectorXd q_e = (q.array() + eps).matrix();
+    Eigen::MatrixXd J_e = ComputeJacobian(frame_name, q_e);
+
+    return (J_e - J) / eps;
 }
 
 bool RobotModel::ComputeIK(const std::string& frame_name,

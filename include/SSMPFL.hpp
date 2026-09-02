@@ -1,7 +1,7 @@
 #pragma once
-#include "RobotModel.hpp"
+#include "robot_model.hpp"
 // #include "JacobianUtils.hpp"
-#include "MinDistance.hpp"
+#include "minDistance.hpp"
 // #include "QPSolver.hpp"
 
 // -----------------------------------------------------------------------
@@ -42,26 +42,27 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
                             const Eigen::VectorXd& q_des,
                             const Eigen::VectorXd& /*qd_des*/, // unused in source too
                             double Qv) {
-    const int n = robot.numJoints();
+    const int n = 7;
 
     Eigen::VectorXd q_tp = q_t + delta_t * qdot_t;
 
-    Eigen::Vector3d x_t = translationOf(robot.getTransform(q_t, links::tool0));
-    Eigen::MatrixXd J_t = linearBlock(robot.geometricJacobian(q_t, links::tool0));
-    Eigen::MatrixXd Jd_t = linearBlock(derivativeJacobian(robot, q_t, links::tool0));
+    Eigen::Vector3d x_t = robot.GetJointPose("panda_link8", q_tp).translation();
+    Eigen::MatrixXd J_t = robot.ComputeJacobian("panda_link8", q_t).bottomRows(3);
+    Eigen::MatrixXd Jd_t = robot.ComputeDerivativeJacobian("panda_link8", q_t).bottomRows(3);
     Eigen::Vector3d xd_t = J_t * qdot_t;
     (void)xd_t; // computed in source, unused there too
 
     ro = ro + vo * delta_t;
 
     // --- Objective: joint-space + task-space tracking ------------------
-    Eigen::MatrixXd weight_matrix = Eigen::MatrixXd::Zero(6, 6);
+    Eigen::MatrixXd weight_matrix = Eigen::MatrixXd::Zero(7, 6);
     weight_matrix(0, 0) = 1.5;
     weight_matrix(1, 1) = 3.0;
     weight_matrix(2, 2) = 3.0;
     weight_matrix(3, 3) = 1.75;
     weight_matrix(4, 4) = 1.75;
     weight_matrix(5, 5) = 0.1;
+    weight_matrix(6, 6) = 0.1;
     // NOTE: weight_matrix is 6x6 in the source regardless of n; if your
     // robot doesn't have 6 joints, resize/adjust this block accordingly.
 
@@ -100,29 +101,29 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     // robot.ComputeJacobian("panda_link8", q_t).bottomRows(3);
 
     // --- SSM+PFL constraints (per-link kinematics) ----------------------
-    Eigen::MatrixXd J1  = linearBlock(robot.geometricJacobian(q_t, links::base));
-    Eigen::MatrixXd J1d = linearBlock(derivativeJacobian(robot, q_t, links::base));
-    Eigen::Vector3d r1  = translationOf(robot.getTransform(q_tp, links::base));
+    Eigen::MatrixXd J1  = robot.ComputeJacobian("panda_link2", q_t).bottomRows(3);
+    Eigen::MatrixXd J1d = robot.ComputeDerivativeJacobian("panda_link2", q_t).bottomRows(3);
+    Eigen::Vector3d r1  = robot.GetJointPose("panda_link2", q_t).translation();
 
-    Eigen::MatrixXd J2  = linearBlock(robot.geometricJacobian(q_t, links::shoulder));
-    Eigen::MatrixXd J2d = linearBlock(derivativeJacobian(robot, q_t, links::shoulder));
-    Eigen::Vector3d r2  = translationOf(robot.getTransform(q_tp, links::shoulder));
+    Eigen::MatrixXd J2  = robot.ComputeJacobian("panda_link3", q_t).bottomRows(3);
+    Eigen::MatrixXd J2d = robot.ComputeDerivativeJacobian("panda_link3", q_t).bottomRows(3);
+    Eigen::Vector3d r2  = robot.GetJointPose("panda_link3", q_t).translation();
 
-    Eigen::MatrixXd J3  = linearBlock(robot.geometricJacobian(q_t, links::forearm));
-    Eigen::MatrixXd J3d = linearBlock(derivativeJacobian(robot, q_t, links::forearm));
-    Eigen::Vector3d r3  = translationOf(robot.getTransform(q_tp, links::forearm));
+    Eigen::MatrixXd J3  = robot.ComputeJacobian("panda_link4", q_t).bottomRows(3);
+    Eigen::MatrixXd J3d = robot.ComputeDerivativeJacobian("panda_link4", q_t).bottomRows(3);
+    Eigen::Vector3d r3  = robot.GetJointPose("panda_link4", q_t).translation();
 
-    Eigen::MatrixXd J4  = linearBlock(robot.geometricJacobian(q_t, links::wrist1));
-    Eigen::MatrixXd J4d = linearBlock(derivativeJacobian(robot, q_t, links::wrist1));
-    Eigen::Vector3d r4  = translationOf(robot.getTransform(q_tp, links::wrist1));
+    Eigen::MatrixXd J4  = robot.ComputeJacobian("panda_link5", q_t).bottomRows(3);
+    Eigen::MatrixXd J4d = robot.ComputeDerivativeJacobian("panda_link5", q_t).bottomRows(3);
+    Eigen::Vector3d r4  = robot.GetJointPose("panda_link5", q_t).translation();
 
-    Eigen::MatrixXd J5  = linearBlock(robot.geometricJacobian(q_t, links::wrist2));
-    Eigen::MatrixXd J5d = linearBlock(derivativeJacobian(robot, q_t, links::wrist2));
-    Eigen::Vector3d r5  = translationOf(robot.getTransform(q_tp, links::wrist2));
+    Eigen::MatrixXd J5  = robot.ComputeJacobian("panda_link7", q_t).bottomRows(3);
+    Eigen::MatrixXd J5d = robot.ComputeDerivativeJacobian("panda_link7", q_t).bottomRows(3);
+    Eigen::Vector3d r5  = robot.GetJointPose("panda_link7", q_t).translation();
 
-    Eigen::MatrixXd J6  = linearBlock(robot.geometricJacobian(q_t, links::tool0));
-    Eigen::MatrixXd J6d = linearBlock(derivativeJacobian(robot, q_t, links::tool0));
-    Eigen::Vector3d r6  = translationOf(robot.getTransform(q_tp, links::tool0));
+    Eigen::MatrixXd J6  = robot.ComputeJacobian("panda_link8", q_t).bottomRows(3);
+    Eigen::MatrixXd J6d = robot.ComputeDerivativeJacobian("panda_link8", q_t).bottomRows(3);
+    Eigen::Vector3d r6  = robot.GetJointPose("panda_link8", q_t).translation();
 
     // NOTE: unlike SSMescape/SSMcheck, here the constraint rows are scaled
     // by delta_t only (not stopping_time), and the RHS margin term uses
@@ -184,6 +185,9 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
            - ((ro.transpose() * J5 - r4.transpose() * J5 - (r5 - r4).transpose() * J4) * qdot_t).value()
            - (delta_t * (ro - r5).transpose() * J5d * qdot_t).value();
 
+
+/*
+       
     // --- Optimization ----------------------------------------------------
     QPResult qp = solveQP(H, f, A, b, q_lb, q_ub);
 
@@ -207,6 +211,12 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
         out.x_tplusone = x_t;
         out.xd_tplusone = Eigen::Vector3d::Zero();
     }
+
+    */
+
+
+
+    SSMPFLResult out;
 
     return out;
 }

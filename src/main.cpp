@@ -16,8 +16,8 @@
 #include "min_distance_calculation.hpp"
 #include "robot_model.hpp"
 
-#include "COLLcheck.hpp"
-// #include "SSMPFL.hpp"
+// #include "COLLcheck.hpp"
+#include "SSMPFL.hpp"
 
 // Global flag, set by the signal handler
 std::atomic<bool> running{true};
@@ -211,36 +211,49 @@ int SSM_PFL_escape(RobotModel& robot,
         std::cout << "HUman velocity: " << pd_h << std::endl;
         std::cout << "HUman acceleration: " << pdd_h << std::endl;
 
-                   }
-    /* 
-            
+
             // =================================================================
             // LOOP w4: PFL Velocities (outer loop)
             // =================================================================
             for (int w4 = 0; w4 < numberPFL; ++w4) {
                 double velocity_PFL = params.vel_PFL[w4];
+
+ 
+            
                 
                 // =============================================================
                 // LOOP w3: Qv Values (inner loop)
                 // =============================================================
                 for (int w3 = 0; w3 < number_QpQv; ++w3) {
                     double Qv = params.Qvs[w3];
+
+
                     
                     // Initialize simulation state
-                    Vector6 qddot_real = Vector6::Zero();
-                    Vector6 qdot_real = traj.qd.col(0);
-                    Vector6 q_real = traj.q.col(0);
-                    Vector3 p_real = p_r[0];
-                    Vector3 v_real = pd_r[0];
+                    Eigen::VectorXd q_real = q_r;
+                    Eigen::VectorXd qd_real = qd_r;
+                    Eigen::VectorXd qdd_real = Eigen::VectorXd::Zero(7);
+                    Eigen::VectorXd p_real = p_r;
+                    Eigen::VectorXd pd_real = pd_r;
                     
-                    std::vector<double> v_real_module;
-                    std::vector<Vector6> qddot_real_history;
+                    std::vector<double> pd_real_module;
+                    std::vector<Eigen::VectorXd> qdd_real_history;
                     
                     bool collision = false;
                     int collision_counter = 0;
                     int arrival_step = number_time_points_complete;
                     int reference_time = 0;
                     int failure_flag = 0;
+
+
+
+                    
+                    }
+                }
+            }
+    /* 
+
+
                     
                     // Main control loop
                     for (int i = 0; i < number_time_points_complete - 1; ++i) {
@@ -258,10 +271,10 @@ int SSM_PFL_escape(RobotModel& robot,
                                 dt,
                                 params.stopping_time,
                                 q_real,
-                                qdot_real,
+                                qd_real,
                                 p_r[reference_time + 1],
                                 pd_r[reference_time + 1],
-                                qddot_real,
+                                qdd_real,
                                 p_h,
                                 pd_h,
                                 delta_safety,
@@ -270,19 +283,32 @@ int SSM_PFL_escape(RobotModel& robot,
                                 Qv,
                                 velocity_term
                             );
+
+
+
+
+
                             
                             // Update state
-                            qddot_real = res.qddot;
-                            qdot_real = res.qdot_next;
+                            qdd_real = res.qddot;
+                            qd_real = res.qdot_next;
                             q_real = res.q_next;
                             p_real = res.p_next;
-                            v_real = res.v_next;
+                            pd_real = res.v_next;
                             
-                            v_real_module.push_back(v_real.norm());
-                            qddot_real_history.push_back(qddot_real);
+                            pd_real_module.push_back(pd_real.norm());
+                            qdd_real_history.push_back(qdd_real);
                             
                             // Increment reference trajectory time
                             reference_time++;
+
+
+
+   
+
+
+
+
                             
                             // Check if optimization succeeded
                             if (res.flag == 1) {
@@ -309,12 +335,12 @@ int SSM_PFL_escape(RobotModel& robot,
                         } else {
                             // Collision recovery phase
                             collision_counter++;
-                            qddot_real.setZero();
-                            qdot_real.setZero();
+                            qdd_real.setZero();
+                            qd_real.setZero();
                             q_real.setZero();
                             p_real.setZero();
-                            v_real.setZero();
-                            v_real_module.push_back(0.0);
+                            pd_real.setZero();
+                            pd_real_module.push_back(0.0);
                             
                             if (collision_counter > params.pause_after_collision * params.computational_frequency) {
                                 collision = false;
@@ -328,14 +354,14 @@ int SSM_PFL_escape(RobotModel& robot,
                     // =============================================================
                     if (failure_flag == 1) {
                         T_TIME[w1][w2][w3][w4] = std::nan("");
-                        v_real_rms[w1][w2][w3][w4] = std::nan("");
+                        pd_real_rms[w1][w2][w3][w4] = std::nan("");
                         R_IDLE[w1][w2][w3][w4] = std::nan("");
                     } else {
                         if (arrival_step < number_time_points_complete) {
                             T_TIME[w1][w2][w3][w4] = arrival_step * dt;
                             
-                            if (!v_real_module.empty()) {
-                                v_real_rms[w1][w2][w3][w4] = math::rms(v_real_module);
+                            if (!pd_real_module.empty()) {
+                                pd_real_rms[w1][w2][w3][w4] = math::rms(pd_real_module);
                             }
                             
                             if (T_TIME[w1][w2][w3][w4] > 1e-6) {
@@ -343,7 +369,7 @@ int SSM_PFL_escape(RobotModel& robot,
                             }
                         } else {
                             T_TIME[w1][w2][w3][w4] = std::nan("");
-                            v_real_rms[w1][w2][w3][w4] = std::nan("");
+                            pd_real_rms[w1][w2][w3][w4] = std::nan("");
                             R_IDLE[w1][w2][w3][w4] = std::nan("");
                         }
                     }
@@ -355,54 +381,8 @@ int SSM_PFL_escape(RobotModel& robot,
         }
     }
     
-    // =========================================================================
-    // PLOT RESULTS (MATLAB: "Plot of the results")
-    // =========================================================================
-    std::cout << "\n=== Experiment Complete ===" << std::endl;
-    std::cout << "Results stored in T_TIME, v_real_rms, R_STOP, R_IDLE matrices." << std::endl;
-    
-    // Example: Compute mean ratios for surface plots
-    std::vector<std::vector<double>> mean_v_rms_ratio(number_QpQv, std::vector<double>(numberPFL, 0.0));
-    std::vector<std::vector<double>> mean_T_TIME_ratio(number_QpQv, std::vector<double>(numberPFL, 0.0));
-    std::vector<std::vector<double>> mean_R_STOP(number_QpQv, std::vector<double>(numberPFL, 0.0));
-    std::vector<std::vector<double>> mean_R_IDLE(number_QpQv, std::vector<double>(numberPFL, 0.0));
-    
-    int valid_count = 0;
-    for (int w3 = 0; w3 < number_QpQv; ++w3) {
-        for (int w4 = 0; w4 < numberPFL; ++w4) {
-            double sum_v = 0.0, sum_T = 0.0, sum_R_STOP = 0.0, sum_R_IDLE = 0.0;
-            int count = 0;
-            
-            for (int w1 = 0; w1 < params.number_trajectories; ++w1) {
-                for (int w2 = 0; w2 < params.number_intrusions_per_trajectory; ++w2) {
-                    if (!std::isnan(v_real_rms[w1][w2][w3][w4])) {
-                        double v_nominal = 1.0; // Use actual v_rms_nominal[w1][w2] in production
-                        sum_v += v_nominal / v_real_rms[w1][w2][w3][w4];
-                        
-                        if (T_TIME_ORIGINAL[w1][w2][w3][w4] > 1e-6) {
-                            sum_T += T_TIME[w1][w2][w3][w4] / T_TIME_ORIGINAL[w1][w2][w3][w4];
-                        }
-                        
-                        sum_R_STOP += R_STOP[w1][w2][w3][w4];
-                        sum_R_IDLE += R_IDLE[w1][w2][w3][w4];
-                        count++;
-                    }
-                }
-            }
-            
-            if (count > 0) {
-                mean_v_rms_ratio[w3][w4] = sum_v / count;
-                mean_T_TIME_ratio[w3][w4] = sum_T / count;
-                mean_R_STOP[w3][w4] = sum_R_STOP / count;
-                mean_R_IDLE[w3][w4] = sum_R_IDLE / count;
-            }
-            
-            std::cout << "Qv=" << params.Qvs[w3] << ", PFL=" << params.vel_PFL[w4] 
-                      << " -> V-SMOOTHNESS=" << mean_v_rms_ratio[w3][w4]
-                      << ", E-TIME=" << mean_T_TIME_ratio[w3][w4]
-                      << ", R-STOP=" << mean_R_STOP[w3][w4] << std::endl;
-        }
-    }*/
+
+    */
     
     return 0;
 }
@@ -493,6 +473,7 @@ std::optional<Trajectory> load_trajectory(int n_traj, std::string c_dir) {
 }
 
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Execute task
 // ─────────────────────────────────────────────────────────────────────────────
@@ -532,6 +513,7 @@ int execute_task (int n_traj, std::string c_dir="") {
             Eigen::VectorXd qdd_r(Eigen::Map<Eigen::VectorXd>((*traj).qdd[elapsed_ms].data(), (*traj).qdd[elapsed_ms].size()));
             
             task_engine(transmitters, robot, elapsed_ms, q_r, qd_r, qdd_r, p_h, pd_h, pdd_h);
+            break;
         }
         else {
             loop_start = std::chrono::steady_clock::now();
