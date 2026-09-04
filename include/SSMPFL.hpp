@@ -3,12 +3,16 @@
 // #include "JacobianUtils.hpp"
 #include "minDistance.hpp"
 // #include "QPSolver.hpp"
+// #include <casadi/casadi.hpp>
+#include <qpOASES.hpp>
+       
+// using namespace casadi;
 
 // -----------------------------------------------------------------------
 // Appendix D: "SSMPFL.m"
 //
 // function [qddot,qd_tplusone,q_tplusone,x_tplusone,xd_tplusone,exitflag] =
-//     SSMPFL(robot,q_limits,qdot_limits,qddot_limits,delta_t,stopping_time,
+//     SSMPFL(robot,q_limits,qd_limits,qdd_limits,delta_t,stopping_time,
 //            q_t,qdot_t,x_ref_tplusone,xd_ref_tplusone,qddot_suggestion,
 //            ro,vo,delta,q_des,qd_des,Qv)
 //
@@ -25,24 +29,39 @@ struct SSMPFLResult {
     int exitflag;
 };
 
+// casadi::DM eigenToDM(const Eigen::MatrixXd& mat) {
+//               casadi::DM dm = casadi::DM::zeros(mat.rows(), mat.cols());
+//               for (int r = 0; r < mat.rows(); ++r)
+//                      for (int c = 0; c < mat.cols(); ++c)
+//                      dm(r, c) = mat(r, c);
+//               return dm;
+//        }
+ 
+
+
 inline SSMPFLResult SSMPFL(const RobotModel& robot,
-                            const Eigen::MatrixXd& q_limits,    // n x 2 [min max]
-                            const Eigen::MatrixXd& qdot_limits, // n x 2
-                            const Eigen::MatrixXd& qddot_limits,// n x 2
                             double delta_t,
                             double stopping_time,
                             const Eigen::VectorXd& q_t,
                             const Eigen::VectorXd& qdot_t,
                             const Eigen::Vector3d& x_ref_tplusone,
                             const Eigen::Vector3d& xd_ref_tplusone,
-                            const Eigen::VectorXd& /*qddot_suggestion*/, // unused in source too
                             Eigen::Vector3d ro,
                             const Eigen::Vector3d& vo,
                             double delta,
                             const Eigen::VectorXd& q_des,
-                            const Eigen::VectorXd& /*qd_des*/, // unused in source too
                             double Qv) {
+
     const int n = 7;
+    Eigen::MatrixXd q_limits(2, 7);
+    q_limits << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973,
+                    2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
+    Eigen::MatrixXd qd_limits(2, 7);
+    qd_limits << -2.1750, -2.1750, -2.1750, -2.1750, -2.6100, -2.6100, -2.6100,
+                    2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.6100;
+    Eigen::MatrixXd qdd_limits(2, 7);
+    qdd_limits << -15, -7.5, -10, -12.5, -15, -20, -20,
+                    15, 7.5, 10, 12.5, 15, 20, 20;
 
     Eigen::VectorXd q_tp = q_t + delta_t * qdot_t;
 
@@ -54,8 +73,9 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
 
     ro = ro + vo * delta_t;
 
+
     // --- Objective: joint-space + task-space tracking ------------------
-    Eigen::MatrixXd weight_matrix = Eigen::MatrixXd::Zero(7, 6);
+    Eigen::MatrixXd weight_matrix = Eigen::MatrixXd::Zero(7, 7);
     weight_matrix(0, 0) = 1.5;
     weight_matrix(1, 1) = 3.0;
     weight_matrix(2, 2) = 3.0;
@@ -68,6 +88,7 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
 
     double dt2 = delta_t * delta_t;
     double dt4 = dt2 * dt2;
+
 
     Eigen::MatrixXd Hp = 70.0 * dt4 / 4.0 * weight_matrix + 1.0 * dt4 / 2.0 * J_t.transpose() * J_t;
 
@@ -84,17 +105,19 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     Eigen::MatrixXd H = Hp + Qv * Hv;
     Eigen::VectorXd f = fp + Qv * fv;
 
+    
+
+
     // --- Kinematic / dynamic bounds ------------------------------------
-    Eigen::VectorXd qmin = (q_limits.col(0) - q_t - delta_t * qdot_t) * 2.0 / dt2;
-    Eigen::VectorXd qmax = (q_limits.col(1) - q_t - delta_t * qdot_t) * 2.0 / dt2;
-    Eigen::VectorXd qdmin = (qdot_limits.col(0) - qdot_t) / delta_t;
-    Eigen::VectorXd qdmax = (qdot_limits.col(1) - qdot_t) / delta_t;
-    Eigen::VectorXd qddmin = qddot_limits.col(0);
-    Eigen::VectorXd qddmax = qddot_limits.col(1);
+    Eigen::VectorXd qmin = (q_limits.transpose().col(0) - q_t - delta_t * qdot_t) * 2.0 / dt2;
+    Eigen::VectorXd qmax = (q_limits.transpose().col(1) - q_t - delta_t * qdot_t) * 2.0 / dt2;
+    Eigen::VectorXd qdmin = (qd_limits.transpose().col(0) - qdot_t) / delta_t;
+    Eigen::VectorXd qdmax = (qd_limits.transpose().col(1) - qdot_t) / delta_t;
+    Eigen::VectorXd qddmin = qdd_limits.transpose().col(0);
+    Eigen::VectorXd qddmax = qdd_limits.transpose().col(1);
 
     Eigen::VectorXd q_lb = qmin.cwiseMax(qdmin).cwiseMax(qddmin);
     Eigen::VectorXd q_ub = qmax.cwiseMin(qdmax).cwiseMin(qddmax);
-
 
 
 
@@ -125,6 +148,7 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     Eigen::MatrixXd J6d = robot.ComputeDerivativeJacobian("panda_link8", q_t).bottomRows(3);
     Eigen::Vector3d r6  = robot.GetJointPose("panda_link8", q_t).translation();
 
+
     // NOTE: unlike SSMescape/SSMcheck, here the constraint rows are scaled
     // by delta_t only (not stopping_time), and the RHS margin term uses
     // 1/stopping_time instead — this matches Equation 2.70 in the source
@@ -143,48 +167,132 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     A.row(8) = (ro.transpose() * J4 - r4.transpose() * J4) * delta_t;
     A.row(9) = (ro.transpose() * J5 - r4.transpose() * J5 - (r5 - r4).transpose() * J4) * delta_t;
 
+
     double d2 = delta * delta;
 
     b(0) = 1.0 / stopping_time * (std::pow(minsSSM(r5, r6, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J5 - r5.transpose() * J5) * qdot_t).value()
-           - (delta_t * (ro - r5).transpose() * J5d * qdot_t).value();
+            - ((ro.transpose() * J5 - r5.transpose() * J5) * qdot_t).value()
+            - (delta_t * (ro - r5).transpose() * J5d * qdot_t).value();
 
     b(1) = 1.0 / stopping_time * (std::pow(minsSSM(r5, r6, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J6 - r5.transpose() * J6 - (r6 - r5).transpose() * J5) * qdot_t).value()
-           - (delta_t * (ro - r6).transpose() * J6d * qdot_t).value();
+            - ((ro.transpose() * J6 - r5.transpose() * J6 - (r6 - r5).transpose() * J5) * qdot_t).value()
+            - (delta_t * (ro - r6).transpose() * J6d * qdot_t).value();
 
     b(2) = 1.0 / stopping_time * (std::pow(minsSSM(r1, r2, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J1 - r1.transpose() * J1) * qdot_t).value()
-           - (delta_t * (ro - r1).transpose() * J1d * qdot_t).value();
+            - ((ro.transpose() * J1 - r1.transpose() * J1) * qdot_t).value()
+            - (delta_t * (ro - r1).transpose() * J1d * qdot_t).value();
 
     b(3) = 1.0 / stopping_time * (std::pow(minsSSM(r1, r2, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J2 - r1.transpose() * J2 - (r2 - r1).transpose() * J1) * qdot_t).value()
-           - (delta_t * (ro - r2).transpose() * J2d * qdot_t).value();
+            - ((ro.transpose() * J2 - r1.transpose() * J2 - (r2 - r1).transpose() * J1) * qdot_t).value()
+            - (delta_t * (ro - r2).transpose() * J2d * qdot_t).value();
 
     b(4) = 1.0 / stopping_time * (std::pow(minsSSM(r2, r3, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J2 - r2.transpose() * J2) * qdot_t).value()
-           - (delta_t * (ro - r2).transpose() * J2d * qdot_t).value();
+            - ((ro.transpose() * J2 - r2.transpose() * J2) * qdot_t).value()
+            - (delta_t * (ro - r2).transpose() * J2d * qdot_t).value();
 
     b(5) = 1.0 / stopping_time * (std::pow(minsSSM(r2, r3, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J3 - r2.transpose() * J3 - (r3 - r2).transpose() * J2) * qdot_t).value()
-           - (delta_t * (ro - r3).transpose() * J3d * qdot_t).value();
+            - ((ro.transpose() * J3 - r2.transpose() * J3 - (r3 - r2).transpose() * J2) * qdot_t).value()
+            - (delta_t * (ro - r3).transpose() * J3d * qdot_t).value();
 
     b(6) = 1.0 / stopping_time * (std::pow(minsSSM(r3, r4, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J3 - r3.transpose() * J3) * qdot_t).value()
-           - (delta_t * (ro - r3).transpose() * J3d * qdot_t).value();
+            - ((ro.transpose() * J3 - r3.transpose() * J3) * qdot_t).value()
+            - (delta_t * (ro - r3).transpose() * J3d * qdot_t).value();
 
     b(7) = 1.0 / stopping_time * (std::pow(minsSSM(r3, r4, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J4 - r3.transpose() * J4 - (r4 - r3).transpose() * J3) * qdot_t).value()
-           - (delta_t * (ro - r4).transpose() * J4d * qdot_t).value();
+            - ((ro.transpose() * J4 - r3.transpose() * J4 - (r4 - r3).transpose() * J3) * qdot_t).value()
+            - (delta_t * (ro - r4).transpose() * J4d * qdot_t).value();
 
     b(8) = 1.0 / stopping_time * (std::pow(minsSSM(r4, r5, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J4 - r4.transpose() * J4) * qdot_t).value()
-           - (delta_t * (ro - r4).transpose() * J4d * qdot_t).value();
+            - ((ro.transpose() * J4 - r4.transpose() * J4) * qdot_t).value()
+            - (delta_t * (ro - r4).transpose() * J4d * qdot_t).value();
 
     b(9) = 1.0 / stopping_time * (std::pow(minsSSM(r4, r5, ro, delta), 2) - d2 / 4.0)
-           - ((ro.transpose() * J5 - r4.transpose() * J5 - (r5 - r4).transpose() * J4) * qdot_t).value()
-           - (delta_t * (ro - r5).transpose() * J5d * qdot_t).value();
+            - ((ro.transpose() * J5 - r4.transpose() * J5 - (r5 - r4).transpose() * J4) * qdot_t).value()
+            - (delta_t * (ro - r5).transpose() * J5d * qdot_t).value();
 
+
+
+
+    // USING_NAMESPACE_QPOASES
+
+    int nV = H.rows();       // was hardcoded to 6 — use actual size, not a magic number
+    int nC = A.rows();       // number of inequality rows
+
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> H_rm = H;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> A_rm = A;
+
+    qpOASES::QProblem qp(nV, nC);
+
+    qpOASES::Options options;
+    // options.printLevel = qpOASES::PL_NONE;
+    options.terminationTolerance = 1e-6;
+    qp.setOptions(options);
+
+    int nWSR = 1000000;
+
+    // std::cout << "H: " << H << std::endl;
+    // std::cout << "A: " << A << std::endl;
+    // std::cout << "f: " << f << std::endl;
+    // std::cout << "q_lb: " << q_lb << std::endl;
+    // std::cout << "q_ub: " << q_ub << std::endl;
+    // std::cout << "b: " << b << std::endl;
+
+    Eigen::VectorXd lbA = Eigen::VectorXd::Constant(nC, -qpOASES::INFTY);
+
+
+    qpOASES::returnValue status = qp.init(H_rm.data(), f.data(), A_rm.data(),
+                                        q_lb.data(), q_ub.data(),
+                                        lbA.data(), b.data(),
+                                        nWSR);
+
+    Eigen::VectorXd qddot(nV);
+    qp.getPrimalSolution(qddot.data());
+
+    qpOASES::real_t fval = qp.getObjVal();
+
+    std::cout << "fval: " << fval << std::endl;
+
+    bool success = (status == qpOASES::SUCCESSFUL_RETURN);
+    int simpleStatus = qpOASES::getSimpleStatus(status);
+
+    if (!success) {
+        std::cout << "QP failed to solve. Status: " << simpleStatus << std::endl;
+    }
+
+
+       
+
+       // casadi::DM H_dm = eigenToDM(H);
+       // casadi::DM f_dm = eigenToDM(f);
+       // casadi::DM A_dm = eigenToDM(A);
+       // 
+// 
+       // // Build the QP structure once (H, A sparsity patterns)
+       // SX x = SX::sym("x", 6);
+       // SXDict qp = {{"x", x}, {"f", 0.5*mtimes(x.T(), mtimes(H_dm, x)) + mtimes(f.transpose(f_dm), x)},
+       //        {"g", mtimes(A_dm, x)}};
+// 
+       // // qpOASES plugin — reuses the solver you already evaluated
+       // Dict opts;
+       // opts["printLevel"] = "none";          // ~ 'Display','off'
+       // opts["max_schur"]  = 1000000;         // solver-specific; see plugin docs for exact iter cap
+       // Function solver = qpsol("solver", "qpoases", qp, opts);
+// 
+       // DMDict arg;
+       // arg["h"] = H;   arg["g"] = f;
+       // arg["a"] = A;   arg["uba"] = b;                 // A*x <= b  →  lba = -inf, uba = b
+       // arg["lbx"] = qlb; arg["ubx"] = qub;
+       // arg["x0"] = DM::zeros(6);                        // ~ your [0;0;0;0;0;0]
+// 
+       // DMDict res = solver(arg);
+       // DM qddot = res["x"];
+       // double fval = static_cast<double>(res["f"]);
+// 
+       // Dict stats = solver.stats();
+// 
+       // bool success = stats.at("success");
+       // std::cout << "=========================Return status: " << stats.at("return_status") << std::endl;
+                                   
 
 /*
        
