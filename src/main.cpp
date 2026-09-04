@@ -34,28 +34,13 @@ struct JointLimits {
     Eigen::VectorXd qdd_min, qdd_max;
 };
 
-struct Rng {
-    std::mt19937 gen;
-    std::uniform_real_distribution<double> uniform01{0.0, 1.0};
-    
-    Rng(unsigned seed = 42) : gen(seed) {}
-    
-    double rand01() { return uniform01(gen); }
-    
-    double randRange(double a, double b) { 
-        return a + rand01() * (b - a); 
-    }
-    
-    Eigen::Vector3d randVector3(double xmin, double xmax, 
-                        double ymin, double ymax, 
-                        double zmin, double zmax) {
-        return Eigen::Vector3d{
-            randRange(xmin, xmax),
-            randRange(ymin, ymax),
-            randRange(zmin, zmax)
-        };
-    }
-};
+// Initialize simulation state
+bool do_once = true;
+Eigen::VectorXd q_real;
+Eigen::VectorXd qd_real;
+Eigen::VectorXd qdd_real;
+Eigen::Vector3d p_real;
+Eigen::Vector3d pd_real;
 
 
 struct ExperimentParams {
@@ -149,11 +134,9 @@ int SSM_PFL_escape(RobotModel& robot,
         const Eigen::Vector3d p_h, 
         const Eigen::Vector3d pd_h, 
         const Eigen::Vector3d pdd_h) {
-    std::cout << "=== Appendix B: PFL & SSM & Escape Trajectories ===" << std::endl;
     
     // Initialize parameters and utilities
     ExperimentParams params;
-    Rng rng;
     
     const double dt = params.computational_period();
     const double t_begin = params.time_beginning;
@@ -174,218 +157,136 @@ int SSM_PFL_escape(RobotModel& robot,
     const int number_time_points_complete = static_cast<int>(time_points_complete.size());
     const int number_QpQv = static_cast<int>(params.Qvs.size());
     const int numberPFL = static_cast<int>(params.vel_PFL.size());
-    
-    std::cout << "Time points: " << number_time_points << std::endl;
-    std::cout << "Qv values: " << number_QpQv << std::endl;
-    std::cout << "PFL velocities: " << numberPFL << std::endl;
-    std::cout << "Trajectories: " << params.number_trajectories << std::endl;
-    std::cout << "Intrusions per trajectory: " << params.number_intrusions_per_trajectory << std::endl;
 
-    
-    // Base configuration (MATLAB: q_base = [0,1,1,pi,pi,0]') //0.000000, -0.785398, 0.000000, -2.356194, 0.000000, 1.570796, 0.785398
-    // Eigen::VectorXd q_base{0.000000, -0.785398, 0.000000, -2.356194, 0.000000, 1.570796, 0.785398};
-    
-    std::cout << "\nStarting experiment loops..." << std::endl;
-    
-    
-    // =========================================================================
-    // LOOP w1: Trajectories
-    // =========================================================================
-    for (int w1 = 0; w1 < params.number_trajectories; ++w1) {
-        
+    std::cout << "HERE" << std::endl;
 
-        std::cout << "HERE" << std::endl;
+    Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q_r[0]);
+    std::cout << "Jacobian (6x7):\n" << J << std::endl;
 
-        Eigen::MatrixXd J = robot.ComputeJacobian("panda_link8", q_r[0]);
-        std::cout << "Jacobian (6x7):\n" << J << std::endl;
+    std::array<Eigen::Vector3d, 2> p_r;
+    p_r[0] = robot.GetJointPose("panda_link8", q_r[0]).translation().transpose();
+    p_r[1] = robot.GetJointPose("panda_link8", q_r[1]).translation().transpose();
+    std::array<Eigen::Vector3d, 2> pd_r;
+    pd_r[0] = (J * qd_r[0]).tail<3>();
+    pd_r[1] = (J * qd_r[1]).tail<3>();
 
-        std::array<Eigen::Vector3d, 2> p_r;
-        p_r[0] = robot.GetJointPose("panda_link8", q_r[0]).translation().transpose();
-        p_r[1] = robot.GetJointPose("panda_link8", q_r[1]).translation().transpose();
-        std::array<Eigen::Vector3d, 2> pd_r;
-        pd_r[0] = (J * qd_r[0]).tail<3>();
-        pd_r[1] = (J * qd_r[1]).tail<3>();
+    // Initialize simulation state
+    if (do_once) {
+        q_real = q_r[0];
+        qd_real = qd_r[0];
+        qdd_real = Eigen::VectorXd::Zero(7);
+        p_real = p_r[0];
+        pd_real = pd_r[0];
+        do_once = false;
+    }
 
 
-            // =================================================================
-            // LOOP w4: PFL Velocities (outer loop)
-            // =================================================================
-            for (int w4 = 0; w4 < numberPFL; ++w4) {
-                double velocity_PFL = params.vel_PFL[w4];
+        // // =================================================================
+        // // LOOP w4: PFL Velocities (outer loop)
+        // // =================================================================
+        // for (int w4 = 0; w4 < numberPFL; ++w4) {
+        //     double velocity_PFL = params.vel_PFL[w4];
+// 
+        //     
+        //     // =============================================================
+        //     // LOOP w3: Qv Values (inner loop)
+        //     // =============================================================
+        //     for (int w3 = 0; w3 < number_QpQv; ++w3) {
+        //         double Qv = params.Qvs[w3];
 
+
+
+    double velocity_PFL = params.vel_PFL[0];
+    double Qv = params.Qvs[0];
                 
-                // =============================================================
-                // LOOP w3: Qv Values (inner loop)
-                // =============================================================
-                for (int w3 = 0; w3 < number_QpQv; ++w3) {
-                    double Qv = params.Qvs[w3];
+                
+    
+    std::vector<double> pd_real_module;
+    std::vector<Eigen::VectorXd> qdd_real_history;
+    
+    bool collision = false;
+    int collision_counter = 0;
+    int arrival_step = number_time_points_complete;
+    int failure_flag = 0;
 
+    if (!collision) {
+        // Compute safety distance delta
+        double delta_safety = 0.1 + pd_h.norm() * params.stopping_time;
+        double velocity_term = -( -(delta_safety / params.stopping_time) + velocity_PFL ) * params.stopping_time;
 
-                    
-                    // Initialize simulation state
-                    Eigen::VectorXd q_real = q_r[0];
-                    Eigen::VectorXd qd_real = qd_r[0];
-                    Eigen::VectorXd qdd_real = Eigen::VectorXd::Zero(7);
-                    Eigen::VectorXd p_real = p_r[0];
-                    Eigen::VectorXd pd_real = pd_r[0];
-                    
-                    std::vector<double> pd_real_module;
-                    std::vector<Eigen::VectorXd> qdd_real_history;
-                    
-                    bool collision = false;
-                    int collision_counter = 0;
-                    int arrival_step = number_time_points_complete;
-                    int reference_time = 0;
-                    int failure_flag = 0;
+        // std::cout << "=================================" << std::endl;
+        // std::cout << q_real << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << qd_real << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << p_r[1] << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << pd_r[1] << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << p_h << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << pd_h << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << velocity_term << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << q_r[1] << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
+        // std::cout << Qv << std::endl;
+        // std::cout << "---------------------------------" << std::endl;
 
-                    // Compute safety distance delta
-                    double delta_safety = 0.1 + pd_h.norm() * params.stopping_time;
-                    
-                    // PFL velocity scaling term (from MATLAB code)
-                    double velocity_term = -( -(delta_safety / params.stopping_time) + velocity_PFL ) * params.stopping_time;
-
-                    // std::cout << "=================================" << std::endl;
-                    // std::cout << q_real << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << qd_real << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << p_r[1] << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << pd_r[1] << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << p_h << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << pd_h << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << velocity_term << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << q_r[1] << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-                    // std::cout << Qv << std::endl;
-                    // std::cout << "---------------------------------" << std::endl;
-
-
-                    SSMPFLResult res = SSMPFL(robot,
-                                                dt,
-                                                params.stopping_time,
-                                                q_real,
-                                                qd_real,
-                                                p_r[reference_time + 1],
-                                                pd_r[reference_time + 1],
-                                                p_h,
-                                                pd_h,
-                                                velocity_term,
-                                                q_r[1],
-                                                Qv);
+        SSMPFLResult res = SSMPFL(robot, dt, params.stopping_time, q_real, qd_real, p_r[1], pd_r[1], p_h, pd_h, velocity_term, q_r[1], Qv);
                             
-                    
-                    }
-                }
+        // Update state
+        qdd_real = res.qdd_next;
+        qd_real = res.qd_next;
+        q_real = res.q_next;
+        p_real = res.p_next;
+        pd_real = res.pd_next;
+        
+        pd_real_module.push_back(pd_real.norm());
+        qdd_real_history.push_back(qdd_real);
+        
+        // Check if optimization succeeded
+        if (res.exitflag) {
+            // Check collision with human (distance <= 0.1m)
+            if ((p_real - p_h).norm() <= 0.1) {
+                // R_STOP[w1][w2][w3][w4] += 1.0;
+                collision = true;
+                collision_counter = 0;
+                std::cout << "===================== Collision detected" << std::endl;
+                // std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Collision at step " << i << std::endl;
             }
-    /* 
-
-
-                    
-                    // Main control loop
-                    for (int i = 0; i < number_time_points_complete - 1; ++i) {
-                        if (!collision) {
-                            // Compute safety distance delta
-                            double delta_safety = 0.1 + pd_h.norm() * params.stopping_time;
-                            
-                            // PFL velocity scaling term (from MATLAB code)
-                            double velocity_term = -( -(delta_safety / params.stopping_time) + velocity_PFL ) * params.stopping_time;
-                            
-                            // Call SSMPFL function (Appendix D)
-                            SSMPFLResult res = SSMPFL(
-                                robot,
-                                params.joint_limits,
-                                dt,
-                                params.stopping_time,
-                                q_real,
-                                qd_real,
-                                p_r[reference_time + 1],
-                                pd_r[reference_time + 1],
-                                qdd_real,
-                                p_h,
-                                pd_h,
-                                delta_safety,
-                                traj.q.col(reference_time + 1),
-                                traj.qd.col(reference_time + 1),
-                                Qv,
-                                velocity_term
-                            );
-
-
-
-
-
-                            
-                            // Update state
-                            qdd_real = res.qddot;
-                            qd_real = res.qdot_next;
-                            q_real = res.q_next;
-                            p_real = res.p_next;
-                            pd_real = res.v_next;
-                            
-                            pd_real_module.push_back(pd_real.norm());
-                            qdd_real_history.push_back(qdd_real);
-                            
-                            // Increment reference trajectory time
-                            reference_time++;
-
-
-
-   
-
-
-
-
-                            
-                            // Check if optimization succeeded
-                            if (res.flag == 1) {
-                                // Check collision with human (distance <= 0.1m)
-                                if ((p_real - p_h).norm() <= 0.1) {
-                                    R_STOP[w1][w2][w3][w4] += 1.0;
-                                    collision = true;
-                                    collision_counter = 0;
-                                    std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Collision at step " << i << std::endl;
-                                }
-                                
-                                // Check if robot reached goal position
-                                if ((p_real - p_rf).norm() <= 0.005) {
-                                    arrival_step = i;
-                                    std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Arrived at t=" << (i * dt) << "s" << std::endl;
-                                    break;
-                                }
-                            } else {
-                                // Optimization failed
-                                failure_flag = 1;
-                                std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Optimization failed" << std::endl;
-                                break;
-                            }
-                        } else {
-                            // Collision recovery phase
-                            collision_counter++;
-                            qdd_real.setZero();
-                            qd_real.setZero();
-                            q_real.setZero();
-                            p_real.setZero();
-                            pd_real.setZero();
-                            pd_real_module.push_back(0.0);
-                            
-                            if (collision_counter > params.pause_after_collision * params.computational_frequency) {
-                                collision = false;
-                                reference_time = 0;
-                            }
-                        }
-                    }
-                }
-            }
+            
+            // // Check if robot reached goal position
+            // if ((p_real - p_r).norm() <= 0.005) {
+            //     // arrival_step = i;
+            //     std::cout << "Trajectory completed" << std::endl;
+            //     // std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Arrived at t=" << (i * dt) << "s" << std::endl;
+            //     return 0;
+            // }
+        } else {
+            // Optimization failed
+            failure_flag = 1;
+            std::cout << "Optimization failed" << std::endl;
+            // std::cout << "    Qv=" << Qv << ", PFL=" << velocity_PFL << " -> Optimization failed" << std::endl;
+            return 1;
+        }
+    } else {
+        // Collision recovery phase
+        collision_counter++;
+        qdd_real.setZero();
+        qd_real.setZero();
+        // q_real.setZero();
+        // p_real.setZero();
+        pd_real.setZero();
+        pd_real_module.push_back(0.0);
+        
+        if (collision_counter > params.pause_after_collision * params.computational_frequency) {
+            collision = false;
+            // reference_time = 0;
         }
     }
-    
 
-    */
     
     return 0;
 }
@@ -425,7 +326,7 @@ int task_engine(
     std::optional<DistanceResult> dist = human_to_robot_distance(skeleton, robot, q_r[0]);
 
     if (!dist) return 1;
-    else std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
+    // else std::cout << "Minimum distance between robot and skeleton: " << dist->length << std::endl;
 
     std::vector<nlohmann::json> payload;
     payload.push_back(std::vector<std::array<double, 3>>{{0, 0, 0}});

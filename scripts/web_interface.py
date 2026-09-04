@@ -91,8 +91,6 @@ def send_data():
             c_h = dtrs[n_devices+3].receive_data()[0]
             c_r = dtrs[n_devices+3].receive_data()[1]
 
-            print(f"c_h: {c_h}, c_r: {c_r}")
-
             msg = {"x": x, "y": y, "z": z, "x_robot": x_robot, "y_robot": y_robot, "z_robot": z_robot, "q_robot": q_robot, "radius": radius, "c_h": c_h, "c_r": c_r}
         else:
             msg = {"x": x, "y": y, "z": z}

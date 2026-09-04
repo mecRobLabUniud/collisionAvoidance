@@ -21,12 +21,12 @@
 // constraints (Equation 2.70 in the thesis).
 // -----------------------------------------------------------------------
 struct SSMPFLResult {
-    Eigen::VectorXd qddot;
-    Eigen::VectorXd qd_tplusone;
-    Eigen::VectorXd q_tplusone;
-    Eigen::Vector3d x_tplusone;
-    Eigen::Vector3d xd_tplusone;
-    int exitflag;
+    Eigen::VectorXd qdd_next;
+    Eigen::VectorXd qd_next;
+    Eigen::VectorXd q_next;
+    Eigen::Vector3d p_next;
+    Eigen::Vector3d pd_next;
+    bool exitflag;
 };
 
 // casadi::DM eigenToDM(const Eigen::MatrixXd& mat) {
@@ -224,7 +224,7 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     qpOASES::QProblem qp(nV, nC);
 
     qpOASES::Options options;
-    // options.printLevel = qpOASES::PL_NONE;
+    options.printLevel = qpOASES::PL_NONE;
     options.terminationTolerance = 1e-6;
     qp.setOptions(options);
 
@@ -250,7 +250,8 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
 
     qpOASES::real_t fval = qp.getObjVal();
 
-    std::cout << "fval: " << fval << std::endl;
+    // std::cout << "fval: " << fval << std::endl;
+    std::cout << "qddot = " << qddot.transpose() << std::endl;
 
     bool success = (status == qpOASES::SUCCESSFUL_RETURN);
     int simpleStatus = qpOASES::getSimpleStatus(status);
@@ -258,73 +259,28 @@ inline SSMPFLResult SSMPFL(const RobotModel& robot,
     if (!success) {
         std::cout << "QP failed to solve. Status: " << simpleStatus << std::endl;
     }
-
-
-       
-
-       // casadi::DM H_dm = eigenToDM(H);
-       // casadi::DM f_dm = eigenToDM(f);
-       // casadi::DM A_dm = eigenToDM(A);
-       // 
-// 
-       // // Build the QP structure once (H, A sparsity patterns)
-       // SX x = SX::sym("x", 6);
-       // SXDict qp = {{"x", x}, {"f", 0.5*mtimes(x.T(), mtimes(H_dm, x)) + mtimes(f.transpose(f_dm), x)},
-       //        {"g", mtimes(A_dm, x)}};
-// 
-       // // qpOASES plugin — reuses the solver you already evaluated
-       // Dict opts;
-       // opts["printLevel"] = "none";          // ~ 'Display','off'
-       // opts["max_schur"]  = 1000000;         // solver-specific; see plugin docs for exact iter cap
-       // Function solver = qpsol("solver", "qpoases", qp, opts);
-// 
-       // DMDict arg;
-       // arg["h"] = H;   arg["g"] = f;
-       // arg["a"] = A;   arg["uba"] = b;                 // A*x <= b  →  lba = -inf, uba = b
-       // arg["lbx"] = qlb; arg["ubx"] = qub;
-       // arg["x0"] = DM::zeros(6);                        // ~ your [0;0;0;0;0;0]
-// 
-       // DMDict res = solver(arg);
-       // DM qddot = res["x"];
-       // double fval = static_cast<double>(res["f"]);
-// 
-       // Dict stats = solver.stats();
-// 
-       // bool success = stats.at("success");
-       // std::cout << "=========================Return status: " << stats.at("return_status") << std::endl;
-                                   
-
-/*
-       
-    // --- Optimization ----------------------------------------------------
-    QPResult qp = solveQP(H, f, A, b, q_lb, q_ub);
+                            
 
     SSMPFLResult out;
-    out.exitflag = qp.exitflag;
+    out.exitflag = success;
 
-    if (qp.exitflag == 1) {
-        out.qddot = qp.x;
-        out.q_tplusone = q_t + delta_t * qdot_t + dt2 / 2.0 * out.qddot;
-        out.qd_tplusone = qdot_t + delta_t * out.qddot;
+    if (out.exitflag) {
+        out.qdd_next = qddot;
+        out.q_next = q_t + delta_t * qdot_t + dt2 / 2.0 * out.qdd_next;
+        out.qd_next = qdot_t + delta_t * out.qdd_next;
 
-        Eigen::Matrix4d x_tplusone_T = robot.getTransform(out.q_tplusone, links::tool0);
-        out.x_tplusone = translationOf(x_tplusone_T);
+        out.p_next = robot.GetJointPose("panda_link8", out.q_next).translation();
 
-        Eigen::MatrixXd J_tplusone = linearBlock(robot.geometricJacobian(out.q_tplusone, links::tool0));
-        out.xd_tplusone = J_tplusone * out.qd_tplusone;
+        Eigen::MatrixXd J_next = robot.ComputeJacobian("panda_link8", out.q_next).bottomRows(3);
+        out.pd_next = J_next * out.qd_next;
     } else {
-        out.qddot = Eigen::VectorXd::Zero(n);
-        out.q_tplusone = q_t;
-        out.qd_tplusone = Eigen::VectorXd::Zero(n);
-        out.x_tplusone = x_t;
-        out.xd_tplusone = Eigen::Vector3d::Zero();
+        out.qdd_next = Eigen::VectorXd::Zero(n);
+        out.q_next = q_t;
+        out.qd_next = Eigen::VectorXd::Zero(n);
+        out.p_next = x_t;
+        out.pd_next = Eigen::Vector3d::Zero();
     }
 
-    */
-
-
-
-    SSMPFLResult out;
 
     return out;
 }
